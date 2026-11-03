@@ -1,0 +1,5 @@
+/costgate
+/dist/
+*.tfplan
+tfplan
+.terraform/
