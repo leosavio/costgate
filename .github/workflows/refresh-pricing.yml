@@ -3,14 +3,19 @@ name: refresh-pricing
 # Weekly: download the public Price List Bulk API files (no AWS credential),
 # rebuild pricing/us-east-1.json and open a PR when a price changed.
 # Requires "Allow GitHub Actions to create and approve pull requests" in the
-# repository settings. A PR opened with GITHUB_TOKEN does not trigger the ci
-# workflow; re-run it from the PR (close/reopen) before merging.
+# repository settings. A PR opened with GITHUB_TOKEN creates the ci run in an
+# approval-required state: approve it from the PR merge box before merging
+# (https://docs.github.com/en/actions/concepts/security/github_token, "When
+# GITHUB_TOKEN triggers workflow runs").
 #
 # dry_run_pr (manual only) proves the PR path without touching main or the
 # real snapshot: it adds a "test_marker" field to the snapshot on a throwaway
 # branch, opens a PR labelled pricing-refresh-test, checks that
-# github-actions[bot] authored it, then closes the PR and deletes the branch
-# in the same run (also on failure).
+# github-actions[bot] authored it and that the ci run waits for approval,
+# then closes the PR and deletes the branch in the same run (also on
+# failure). The ci run of the test PR can no longer resolve its ref once the
+# branch is gone and ends as a failure with no jobs, so the cleanup-test-run
+# job deletes it.
 
 on:
   schedule:
@@ -36,6 +41,9 @@ jobs:
     permissions:
       contents: write # push the refresh branch (and delete the test branch)
       pull-requests: write # open the PR (and close the test PR)
+      actions: read # dry run: read the ci run the test PR creates
+    outputs:
+      test_branch: ${{ steps.pr.outputs.branch }}
     env:
       DRY_RUN: ${{ inputs.dry_run_pr && 'true' || 'false' }}
       TEST_LABEL: pricing-refresh-test
@@ -121,6 +129,18 @@ jobs:
           [ "$base" = main ] || { echo "base is $base"; exit 1; }
           gh pr diff "$n" --repo "$GITHUB_REPOSITORY" | grep -q '^+  "test_marker": ' || { echo "marker not in PR diff"; exit 1; }
           echo "### dry run PR: $URL (author $author, label $labels)" >> "$GITHUB_STEP_SUMMARY"
+          # The ci run of a PR opened with GITHUB_TOKEN waits for approval.
+          # Record what GitHub created; do not fail the proof on it.
+          head_sha="$(echo "$pr" | jq -r .head.sha)"
+          run=""
+          for _ in $(seq 1 12); do
+            run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&head_sha=${head_sha}" \
+              --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml")][0] | select(.) | "\(.id) status=\(.status) conclusion=\(.conclusion)"')"
+            [ -n "$run" ] && break
+            sleep 5
+          done
+          echo "ci run of the test PR: ${run:-none after 60 s}"
+          echo "ci run of the test PR: ${run:-none after 60 s}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: close test PR and delete branch (dry run)
         if: always() && env.DRY_RUN == 'true' && steps.pr.outputs.branch != ''
@@ -140,3 +160,43 @@ jobs:
             [ "$state" = CLOSED ] || { echo "PR state $state"; exit 1; }
           fi
           echo "closed $URL, deleted $BRANCH"
+
+  # Deletes the ci run of the test PR, so a dry run leaves no red run behind.
+  # Separate job: only it holds actions: write, and only for the test branch.
+  cleanup-test-run:
+    needs: refresh
+    if: always() && inputs.dry_run_pr && needs.refresh.outputs.test_branch != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: write # delete the ci run of the test PR
+    env:
+      BRANCH: ${{ needs.refresh.outputs.test_branch }}
+    steps:
+      - name: delete the ci run of the test PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          case "$BRANCH" in pricing/refresh-test-[0-9]*) ;; *) echo "refusing branch $BRANCH"; exit 1 ;; esac
+          list() {
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&branch=${BRANCH}" \
+              --jq '.workflow_runs[] | select(.path == ".github/workflows/ci.yml") | "\(.id) \(.status) \(.conclusion)"'
+          }
+          # Wait until the run exists and every run of the branch is
+          # completed; GitHub refuses to delete a run in progress.
+          runs=""
+          for _ in $(seq 1 36); do
+            runs="$(list)"
+            if [ -n "$runs" ] && ! echo "$runs" | grep -qv ' completed '; then break; fi
+            sleep 5
+          done
+          echo "runs of $BRANCH: ${runs:-none}"
+          [ -n "$runs" ] || exit 0
+          echo "$runs" | while read -r id status conclusion; do
+            [ "$status" = completed ] || { echo "run $id still $status"; exit 1; }
+            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${id}"
+            echo "deleted run $id ($conclusion)"
+            echo "deleted ci run $id of the test PR ($conclusion)" >> "$GITHUB_STEP_SUMMARY"
+          done
+          [ -z "$(list)" ] || { echo "runs left: $(list)"; exit 1; }
