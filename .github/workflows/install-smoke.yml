@@ -146,6 +146,8 @@ jobs:
           fi
           brew --version
           brew tap leosavio/tap
+          # Recent Homebrew refuses formulae from non-official taps until trusted.
+          if brew trust --help >/dev/null 2>&1; then brew trust --formula leosavio/tap/costgate; fi
           tap_version="$(brew info --json=v2 leosavio/tap/costgate | jq -r '.formulae[0].versions.stable')"
           if [ "$tap_version" != "$VERSION" ]; then
             if [ "$IS_LATEST" = true ]; then echo "tap serves $tap_version, want $VERSION"; exit 1; fi
