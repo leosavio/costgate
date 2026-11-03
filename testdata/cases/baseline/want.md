@@ -32,6 +32,36 @@
 | `aws_vpc_endpoint.ssm` | create | – | 14.60 | +14.60 | endpoint hours × 2 AZ: 1460 h × $0.01 = 14.60 (subnet count unknown at plan time; az_count premise 2 (defaults))<br>endpoint data processed: usage not declared (`gb_per_month`) |
 | `aws_vpn_connection.onprem` | create | – | 73.00 | +73.00 | VPN connection hours: 730 h × $0.05 = 36.50<br>TGW VPN attachment hours: 730 h × $0.05 = 36.50<br>TGW VPN data processed: usage not declared (`gb_per_month`) |
 
+<details><summary>Billing keys of 23 cost lines (SKU and invoice description)</summary>
+
+| Resource | Line | SKU | Usage type | Billing rule | Invoice description |
+|---|---|---|---|---|---|
+| `aws_acmpca_certificate_authority.internal` | Private CA (short-lived mode) | `WYNC7HK4PW8UKMKD` | `USE1-ShortLivedCertificatePrivateCA` | fixed_monthly | $50 monthly charge for AWS Private CA (Short-lived certificate mode) operation in US East (N. Virginia) |
+| `aws_cloudtrail.org` | paid events recorded | `HSTGM6MX75VC7UUF` | `USE1-PaidEventsRecorded` | usage | 0.00002 per paid event recorded in US East (N.Virginia) region |
+| `aws_ebs_volume.data` | EBS volume (gp3) | `JG3KUJMBRGHV3N8G` | `EBS:VolumeUsage.gp3` | fixed_monthly | $0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia) |
+| `aws_ec2_transit_gateway_vpc_attachment.main` | TGW VPC attachment hours | `9N2FHGMMCZBKDCGH` | `USE1-TransitGateway-Hours` | fixed_hourly | $0.05 per Transit Gateway VPC Attachment Hour |
+| `aws_ec2_transit_gateway_vpc_attachment.main` | TGW data processed | `7W9NVPG8YS74A6WC` | `USE1-TransitGateway-Bytes` | usage | $0.02 per GB Data Processed by Transit Gateway VPC Attachment |
+| `aws_eip.nat` | public IPv4 address | `4GQUNXTFWVSGPUZK` | `USE1-PublicIPv4:InUseAddress` | fixed_hourly | $0.005 per In-use public IPv4 address per hour |
+| `aws_instance.web` | compute on-demand, Linux t3.micro | `CRAJUW7BTXFMT2UJ` | `BoxUsage:t3.micro` | fixed_hourly | $0.0104 per On Demand Linux t3.micro Instance Hour |
+| `aws_instance.web` | public IPv4 address | `4GQUNXTFWVSGPUZK` | `USE1-PublicIPv4:InUseAddress` | fixed_hourly | $0.005 per In-use public IPv4 address per hour |
+| `aws_instance.web` | root volume (gp3) | `JG3KUJMBRGHV3N8G` | `EBS:VolumeUsage.gp3` | fixed_monthly | $0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia) |
+| `aws_instance.worker` | compute Spot, Linux t4g.micro | `6U8TKDT6A9WNJNP5` | `BoxUsage:t4g.micro` | usage | $0.0084 per On Demand Linux t4g.micro Instance Hour |
+| `aws_instance.worker` | root volume (gp2) | `HY3BZPP2B6K8MSJF` | `EBS:VolumeUsage.gp2` | fixed_monthly | $0.10 per GB-month of General Purpose SSD (gp2) provisioned storage - US East (Northern Virginia) |
+| `aws_kms_key.state` | customer managed key | `U553K98XGDXCYHWS` | `us-east-1-KMS-Keys` | fixed_monthly | $1 per customer managed KMS key version in US East (N. Virginia) |
+| `aws_nat_gateway.main` | NAT gateway hours | `M2YSHUBETB3JX4M4` | `NatGateway-Hours` | fixed_hourly | $0.045 per NAT Gateway Hour |
+| `aws_nat_gateway.main` | NAT data processed | `59S5R83GFPUAGVR5` | `NatGateway-Bytes` | usage | $0.045 per GB Data Processed by NAT Gateways |
+| `aws_route53_resolver_endpoint.inbound` | Resolver ENI hours × 2 | `GZT83HBHCE5EGFNH` | `USE1-ResolverNetworkInterface` | fixed_hourly | $0.125 per hour per Resolver Network Interface |
+| `aws_route53_zone.private` | hosted zone | `KVPGEJE88UW8S779` | `HostedZone` | fixed_monthly | $0.50 per Hosted Zone for the first 25 Hosted Zones |
+| `aws_route53_zone.public` | hosted zone | `KVPGEJE88UW8S779` | `HostedZone` | fixed_monthly | $0.50 per Hosted Zone for the first 25 Hosted Zones |
+| `aws_s3_bucket.trail` | S3 Standard storage | `WP9ANXZGBYYSGJEA` | `TimedStorage-ByteHrs` | usage | $0.023 per GB - first 50 TB / month of storage used |
+| `aws_vpc_endpoint.ssm` | endpoint hours × 2 AZ | `EN2N5TATXE673A3B` | `USE1-VpcEndpoint-Hours` | fixed_hourly | $0.01 per VPC Endpoint Hour |
+| `aws_vpc_endpoint.ssm` | endpoint data processed | `DQYYEZBCWSW5XS2R` | `USE1-VpcEndpoint-Bytes` | usage | $0.01 per GB for upto 1 PB monthly data processed by VPC Endpoints |
+| `aws_vpn_connection.onprem` | VPN connection hours | `EC5BHP9ZANKN9EQD` | `VPN-Usage-Hours:ipsec.1` | fixed_hourly | $0.05 per VPN Connection-Hour |
+| `aws_vpn_connection.onprem` | TGW VPN attachment hours | `CUP7BB8T9H2HZPVT` | `USE1-TransitGateway-Hours` | fixed_hourly | $0.05 per Transit Gateway VPN Attachment Hour |
+| `aws_vpn_connection.onprem` | TGW VPN data processed | `NWMDJWA6SF7Z3MXD` | `USE1-TransitGateway-Bytes` | usage | $0.02 per GB Data Processed by Transit Gateway VPN Attachment |
+
+</details>
+
 #### Usage premises not declared (counted as 0)
 
 - `aws_vpc_endpoint.ssm`: endpoint data processed, set `gb_per_month` in the usage file
@@ -49,4 +79,4 @@
 
 </details>
 
-<sub>costgate test · AWS Price List Bulk API snapshot `us-east-1` as of 2026-11-03T00:09:47Z (sha256 `383a4cb3421f`) · on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included.</sub>
+<sub>costgate test · AWS Price List Bulk API snapshot `us-east-1` as of 2026-11-03T00:09:47Z (sha256 `cbfe2a28af24`) · on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included.</sub>

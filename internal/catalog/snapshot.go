@@ -14,8 +14,14 @@ import (
 	"github.com/leosavio/costgate/internal/money"
 )
 
-// SchemaVersion is the snapshot format this build reads and writes.
-const SchemaVersion = 1
+// SchemaVersion is the snapshot format this build writes. Version 2 adds the
+// billing fields (rate code, raw usage type, service name, location, extra
+// tiers). Every v2 field is omitempty, so a v1 file decodes into the same
+// struct and keeps its digest: Load accepts MinSchemaVersion..SchemaVersion.
+const SchemaVersion = 2
+
+// MinSchemaVersion is the oldest snapshot format this build still reads.
+const MinSchemaVersion = 1
 
 // Source identifies one offer file the snapshot was extracted from.
 type Source struct {
@@ -28,13 +34,37 @@ type Source struct {
 	Path string `json:"path"`
 }
 
-// Price is one on-demand price dimension (first tier when tiered).
+// Price is one on-demand price dimension. USD, TierEnd, RateCode and
+// Description describe the first tier, the one the estimator uses; Tiers
+// lists the following tiers, sorted by start.
 type Price struct {
 	SKU         string `json:"sku"`
 	Unit        string `json:"unit"`
 	USD         string `json:"usd"`
 	TierEnd     string `json:"tier_end,omitempty"`
 	Description string `json:"description"`
+	// v2 fields, all from the offer file row.
+	RateCode    string `json:"rate_code,omitempty"`
+	UsageType   string `json:"usage_type,omitempty"` // with the region prefix, as in the bill
+	ServiceName string `json:"service_name,omitempty"`
+	Location    string `json:"location,omitempty"`
+	Tiers       []Tier `json:"tiers,omitempty"`
+}
+
+// Tier is a price tier after the first one.
+type Tier struct {
+	Start       string `json:"start"`
+	End         string `json:"end,omitempty"` // empty: no upper bound
+	USD         string `json:"usd"`
+	RateCode    string `json:"rate_code"`
+	Description string `json:"description"`
+}
+
+// sameFirstTier compares the scalar fields of two prices.
+func sameFirstTier(a, b Price) bool {
+	return a.SKU == b.SKU && a.Unit == b.Unit && a.USD == b.USD && a.TierEnd == b.TierEnd &&
+		a.Description == b.Description && a.RateCode == b.RateCode && a.UsageType == b.UsageType &&
+		a.ServiceName == b.ServiceName && a.Location == b.Location
 }
 
 // Snapshot is the content of pricing/<region>.json.
@@ -105,14 +135,22 @@ func (s *Snapshot) Encode() ([]byte, error) {
 // Load decodes and validates a snapshot: schema version, digest and every
 // price value.
 func Load(data []byte) (*Snapshot, error) {
+	// Version first, without DisallowUnknownFields: a newer snapshot has
+	// fields this build does not know, and the useful error is the version.
+	var probe struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return nil, fmt.Errorf("pricing snapshot: %w", err)
+	}
+	if probe.SchemaVersion < MinSchemaVersion || probe.SchemaVersion > SchemaVersion {
+		return nil, fmt.Errorf("pricing snapshot: schema_version %d not supported (this build reads %d to %d); upgrade costgate or regenerate with 'costgate pricing refresh'", probe.SchemaVersion, MinSchemaVersion, SchemaVersion)
+	}
 	var s Snapshot
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&s); err != nil {
 		return nil, fmt.Errorf("pricing snapshot: %w", err)
-	}
-	if s.SchemaVersion != SchemaVersion {
-		return nil, fmt.Errorf("pricing snapshot: schema_version %d not supported (this build reads %d)", s.SchemaVersion, SchemaVersion)
 	}
 	if s.Currency != "USD" {
 		return nil, fmt.Errorf("pricing snapshot: currency %q not supported", s.Currency)
@@ -126,6 +164,11 @@ func Load(data []byte) (*Snapshot, error) {
 		if err != nil {
 			return nil, fmt.Errorf("pricing snapshot: price %s: %w", k, err)
 		}
+		for _, t := range p.Tiers {
+			if _, err := money.Parse(t.USD); err != nil {
+				return nil, fmt.Errorf("pricing snapshot: price %s tier %s: %w", k, t.Start, err)
+			}
+		}
 		s.parsed[k] = r
 	}
 	return &s, nil
@@ -135,4 +178,10 @@ func Load(data []byte) (*Snapshot, error) {
 func (s *Snapshot) Lookup(key string) (*big.Rat, bool) {
 	r, ok := s.parsed[key]
 	return r, ok
+}
+
+// Info returns the billing metadata of key (SKU, rate code, raw usage type,
+// description). Fields added in schema_version 2 are empty for a v1 snapshot.
+func (s *Snapshot) Info(key string) Price {
+	return s.Prices[key]
 }

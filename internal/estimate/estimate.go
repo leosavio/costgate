@@ -13,6 +13,20 @@ import (
 	"github.com/leosavio/costgate/internal/usage"
 )
 
+// Billing rules: how AWS bills a line, so a consumer can tell the lines that
+// should match the bill (fixed_*) from the ones whose quantity or price is a
+// premise (usage).
+const (
+	// BillingFixedHourly: billed per hour the resource exists.
+	BillingFixedHourly = "fixed_hourly"
+	// BillingFixedMonthly: billed per month the resource exists (hosted
+	// zone, KMS key, Private CA, provisioned EBS GB-month).
+	BillingFixedMonthly = "fixed_monthly"
+	// BillingUsage: depends on traffic, stored data, events or the Spot
+	// market; the quantity or the price is a premise.
+	BillingUsage = "usage"
+)
+
 // Line is one priced component of a resource side.
 type Line struct {
 	Name      string
@@ -25,6 +39,12 @@ type Line struct {
 	Premise   string
 	Declared  bool
 	Note      string
+	// Billing keys, from the snapshot entry of PriceKey.
+	SKU                string
+	UsageType          string // with the region prefix, as in the bill
+	RateCode           string // first tier, the one the estimate uses
+	BillingDescription string
+	BillingRule        string
 }
 
 // Side is the cost of one side (before or after) of a resource.
@@ -203,9 +223,12 @@ func priceSide(rc plan.ResourceChange, a attrs, u usage.Resolved, cat *catalog.S
 			factors = append(factors, c.factor)
 		}
 		m := money.Mul(factors...)
+		info := cat.Info(c.key)
 		s.Lines = append(s.Lines, Line{
 			Name: c.name, PriceKey: c.key, UnitPrice: price, Quantity: c.qty, Unit: c.unit,
 			Factor: c.factor, Monthly: m, Premise: c.premise, Declared: c.declared, Note: c.note,
+			SKU: info.SKU, UsageType: info.UsageType, RateCode: info.RateCode,
+			BillingDescription: info.Description, BillingRule: c.rule,
 		})
 		s.Monthly = money.Add(s.Monthly, m)
 	}

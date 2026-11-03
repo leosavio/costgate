@@ -1,9 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "region": "us-east-1",
   "currency": "USD",
   "as_of": "2026-11-03T00:09:47Z",
-  "sha256": "383a4cb3421fe8c6ecfb1a3ea20d069d653eba464f9167ae741aba8138526677",
+  "sha256": "cbfe2a28af240aa203cf7ef20f87e2ad41c659d0ef1e0abbaeca700b6f74f273",
   "sources": [
     {
       "service": "AWSCertificateManager",
@@ -67,172 +67,322 @@
       "sku": "KGCRS6DP6RA8WP9M",
       "unit": "CertificateAuthorities",
       "usd": "400.0000000000",
-      "description": "$400 monthly charge for AWS Private CA (General-purpose mode) operation in US East (N.Virginia)"
+      "description": "$400 monthly charge for AWS Private CA (General-purpose mode) operation in US East (N.Virginia)",
+      "rate_code": "KGCRS6DP6RA8WP9M.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-PaidPrivateCA",
+      "service_name": "AWS Certificate Manager",
+      "location": "US East (N. Virginia)"
     },
     "AWSCertificateManager|ShortLivedCertificatePrivateCA|": {
       "sku": "WYNC7HK4PW8UKMKD",
       "unit": "CertificateAuthorities",
       "usd": "50.0000000000",
-      "description": "$50 monthly charge for AWS Private CA (Short-lived certificate mode) operation in US East (N. Virginia)"
+      "description": "$50 monthly charge for AWS Private CA (Short-lived certificate mode) operation in US East (N. Virginia)",
+      "rate_code": "WYNC7HK4PW8UKMKD.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-ShortLivedCertificatePrivateCA",
+      "service_name": "AWS Certificate Manager",
+      "location": "US East (N. Virginia)"
     },
     "AWSCloudTrail|PaidEventsRecorded|": {
       "sku": "HSTGM6MX75VC7UUF",
       "unit": "Events",
       "usd": "0.0000200000",
-      "description": "0.00002 per paid event recorded in US East (N.Virginia) region"
+      "description": "0.00002 per paid event recorded in US East (N.Virginia) region",
+      "rate_code": "HSTGM6MX75VC7UUF.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-PaidEventsRecorded",
+      "service_name": "AWS CloudTrail",
+      "location": "US East (N. Virginia)"
     },
     "AmazonEC2|BoxUsage:m7g.large|RunInstances": {
       "sku": "Y4JWUCG93UEP6MPT",
       "unit": "Hrs",
       "usd": "0.0816000000",
-      "description": "$0.0816 per On Demand Linux m7g.large Instance Hour"
+      "description": "$0.0816 per On Demand Linux m7g.large Instance Hour",
+      "rate_code": "Y4JWUCG93UEP6MPT.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "BoxUsage:m7g.large",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonEC2|BoxUsage:t3.micro|RunInstances": {
       "sku": "CRAJUW7BTXFMT2UJ",
       "unit": "Hrs",
       "usd": "0.0104000000",
-      "description": "$0.0104 per On Demand Linux t3.micro Instance Hour"
+      "description": "$0.0104 per On Demand Linux t3.micro Instance Hour",
+      "rate_code": "CRAJUW7BTXFMT2UJ.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "BoxUsage:t3.micro",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonEC2|BoxUsage:t3.small|RunInstances": {
       "sku": "QA3NBPZEQKZ2K9AR",
       "unit": "Hrs",
       "usd": "0.0208000000",
-      "description": "$0.0208 per On Demand Linux t3.small Instance Hour"
+      "description": "$0.0208 per On Demand Linux t3.small Instance Hour",
+      "rate_code": "QA3NBPZEQKZ2K9AR.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "BoxUsage:t3.small",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonEC2|BoxUsage:t4g.micro|RunInstances": {
       "sku": "6U8TKDT6A9WNJNP5",
       "unit": "Hrs",
       "usd": "0.0084000000",
-      "description": "$0.0084 per On Demand Linux t4g.micro Instance Hour"
+      "description": "$0.0084 per On Demand Linux t4g.micro Instance Hour",
+      "rate_code": "6U8TKDT6A9WNJNP5.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "BoxUsage:t4g.micro",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonEC2|BoxUsage:t4g.small|RunInstances": {
       "sku": "9GWX7R3VJUG9P8Y8",
       "unit": "Hrs",
       "usd": "0.0168000000",
-      "description": "$0.0168 per On Demand Linux t4g.small Instance Hour"
+      "description": "$0.0168 per On Demand Linux t4g.small Instance Hour",
+      "rate_code": "9GWX7R3VJUG9P8Y8.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "BoxUsage:t4g.small",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonEC2|EBS:VolumeUsage.gp2|": {
       "sku": "HY3BZPP2B6K8MSJF",
       "unit": "GB-Mo",
       "usd": "0.1000000000",
-      "description": "$0.10 per GB-month of General Purpose SSD (gp2) provisioned storage - US East (Northern Virginia)"
+      "description": "$0.10 per GB-month of General Purpose SSD (gp2) provisioned storage - US East (Northern Virginia)",
+      "rate_code": "HY3BZPP2B6K8MSJF.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "EBS:VolumeUsage.gp2",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonEC2|EBS:VolumeUsage.gp3|": {
       "sku": "JG3KUJMBRGHV3N8G",
       "unit": "GB-Mo",
       "usd": "0.0800000000",
-      "description": "$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)"
+      "description": "$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)",
+      "rate_code": "JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "EBS:VolumeUsage.gp3",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonEC2|EBS:VolumeUsage.sc1|": {
       "sku": "6U5VMCFHHMTH3QW6",
       "unit": "GB-Mo",
       "usd": "0.0150000000",
-      "description": "$0.015 per GB-month of Cold HDD (sc1) provisioned storage - US East (Northern Virginia)"
+      "description": "$0.015 per GB-month of Cold HDD (sc1) provisioned storage - US East (Northern Virginia)",
+      "rate_code": "6U5VMCFHHMTH3QW6.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "EBS:VolumeUsage.sc1",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonEC2|EBS:VolumeUsage.st1|": {
       "sku": "YQT3C842QHBG6XCU",
       "unit": "GB-Mo",
       "usd": "0.0450000000",
-      "description": "$0.045 per GB-month of Throughput Optimized HDD (st1) provisioned storage - US East (Northern Virginia)"
+      "description": "$0.045 per GB-month of Throughput Optimized HDD (st1) provisioned storage - US East (Northern Virginia)",
+      "rate_code": "YQT3C842QHBG6XCU.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "EBS:VolumeUsage.st1",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonEC2|EBS:VolumeUsage|": {
       "sku": "269VXUCZZ7E6JNXT",
       "unit": "GB-Mo",
       "usd": "0.0500000000",
-      "description": "$0.05 per GB-month of Magnetic provisioned storage - US East (Northern Virginia)"
+      "description": "$0.05 per GB-month of Magnetic provisioned storage - US East (Northern Virginia)",
+      "rate_code": "269VXUCZZ7E6JNXT.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "EBS:VolumeUsage",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonEC2|NatGateway-Bytes|NatGateway": {
       "sku": "59S5R83GFPUAGVR5",
       "unit": "GB",
       "usd": "0.0450000000",
-      "description": "$0.045 per GB Data Processed by NAT Gateways"
+      "description": "$0.045 per GB Data Processed by NAT Gateways",
+      "rate_code": "59S5R83GFPUAGVR5.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "NatGateway-Bytes",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonEC2|NatGateway-Hours|NatGateway": {
       "sku": "M2YSHUBETB3JX4M4",
       "unit": "Hrs",
       "usd": "0.0450000000",
-      "description": "$0.045 per NAT Gateway Hour"
+      "description": "$0.045 per NAT Gateway Hour",
+      "rate_code": "M2YSHUBETB3JX4M4.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "NatGateway-Hours",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonRoute53|HostedZone|": {
       "sku": "KVPGEJE88UW8S779",
       "unit": "HostedZone",
       "usd": "0.5000000000",
       "tier_end": "25",
-      "description": "$0.50 per Hosted Zone for the first 25 Hosted Zones"
+      "description": "$0.50 per Hosted Zone for the first 25 Hosted Zones",
+      "rate_code": "KVPGEJE88UW8S779.JRTCKXETXF.G2A93NZ7DT",
+      "usage_type": "HostedZone",
+      "service_name": "Amazon Route 53",
+      "location": "Any",
+      "tiers": [
+        {
+          "start": "25",
+          "usd": "0.1000000000",
+          "rate_code": "KVPGEJE88UW8S779.JRTCKXETXF.VYAP54KATQ",
+          "description": "$0.10 per Hosted Zone for additional Hosted Zones"
+        }
+      ]
     },
     "AmazonRoute53|ResolverNetworkInterface|": {
       "sku": "GZT83HBHCE5EGFNH",
       "unit": "Hours",
       "usd": "0.1250000000",
-      "description": "$0.125 per hour per Resolver Network Interface"
+      "description": "$0.125 per hour per Resolver Network Interface",
+      "rate_code": "GZT83HBHCE5EGFNH.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-ResolverNetworkInterface",
+      "service_name": "Amazon Route 53",
+      "location": "US East (N. Virginia)"
     },
     "AmazonS3|TimedStorage-ByteHrs|": {
       "sku": "WP9ANXZGBYYSGJEA",
       "unit": "GB-Mo",
       "usd": "0.0230000000",
       "tier_end": "51200",
-      "description": "$0.023 per GB - first 50 TB / month of storage used"
+      "description": "$0.023 per GB - first 50 TB / month of storage used",
+      "rate_code": "WP9ANXZGBYYSGJEA.JRTCKXETXF.PGHJ3S3EYE",
+      "usage_type": "TimedStorage-ByteHrs",
+      "service_name": "Amazon Simple Storage Service",
+      "location": "US East (N. Virginia)",
+      "tiers": [
+        {
+          "start": "51200",
+          "end": "512000",
+          "usd": "0.0220000000",
+          "rate_code": "WP9ANXZGBYYSGJEA.JRTCKXETXF.D42MF2PVJS",
+          "description": "$0.022 per GB - next 450 TB / month of storage used"
+        },
+        {
+          "start": "512000",
+          "usd": "0.0210000000",
+          "rate_code": "WP9ANXZGBYYSGJEA.JRTCKXETXF.PXJDJ3YRG3",
+          "description": "$0.021 per GB - storage used / month over 500 TB"
+        }
+      ]
     },
     "AmazonVPC|PublicIPv4:InUseAddress|": {
       "sku": "4GQUNXTFWVSGPUZK",
       "unit": "Hrs",
       "usd": "0.0050000000",
-      "description": "$0.005 per In-use public IPv4 address per hour"
+      "description": "$0.005 per In-use public IPv4 address per hour",
+      "rate_code": "4GQUNXTFWVSGPUZK.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-PublicIPv4:InUseAddress",
+      "service_name": "Amazon Virtual Private Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonVPC|TransitGateway-Bytes|TransitGatewayVPC": {
       "sku": "7W9NVPG8YS74A6WC",
       "unit": "GigaBytes",
       "usd": "0.0200000000",
-      "description": "$0.02 per GB Data Processed by Transit Gateway VPC Attachment"
+      "description": "$0.02 per GB Data Processed by Transit Gateway VPC Attachment",
+      "rate_code": "7W9NVPG8YS74A6WC.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-TransitGateway-Bytes",
+      "service_name": "Amazon Virtual Private Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonVPC|TransitGateway-Bytes|TransitGatewayVPN": {
       "sku": "NWMDJWA6SF7Z3MXD",
       "unit": "GigaBytes",
       "usd": "0.0200000000",
-      "description": "$0.02 per GB Data Processed by Transit Gateway VPN Attachment"
+      "description": "$0.02 per GB Data Processed by Transit Gateway VPN Attachment",
+      "rate_code": "NWMDJWA6SF7Z3MXD.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-TransitGateway-Bytes",
+      "service_name": "Amazon Virtual Private Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonVPC|TransitGateway-Hours|TransitGatewayPeering": {
       "sku": "PGNDUBPKV98PF5TB",
       "unit": "hour",
       "usd": "0.0500000000",
-      "description": "$0.05 per hour for TransitGateway-Hours:TransitGatewayPeering in US East (N. Virginia)"
+      "description": "$0.05 per hour for TransitGateway-Hours:TransitGatewayPeering in US East (N. Virginia)",
+      "rate_code": "PGNDUBPKV98PF5TB.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-TransitGateway-Hours",
+      "service_name": "Amazon Virtual Private Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonVPC|TransitGateway-Hours|TransitGatewayVPC": {
       "sku": "9N2FHGMMCZBKDCGH",
       "unit": "hour",
       "usd": "0.0500000000",
-      "description": "$0.05 per Transit Gateway VPC Attachment Hour"
+      "description": "$0.05 per Transit Gateway VPC Attachment Hour",
+      "rate_code": "9N2FHGMMCZBKDCGH.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-TransitGateway-Hours",
+      "service_name": "Amazon Virtual Private Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonVPC|TransitGateway-Hours|TransitGatewayVPN": {
       "sku": "CUP7BB8T9H2HZPVT",
       "unit": "hour",
       "usd": "0.0500000000",
-      "description": "$0.05 per Transit Gateway VPN Attachment Hour"
+      "description": "$0.05 per Transit Gateway VPN Attachment Hour",
+      "rate_code": "CUP7BB8T9H2HZPVT.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-TransitGateway-Hours",
+      "service_name": "Amazon Virtual Private Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonVPC|VPN-Usage-Hours:ipsec.1|CreateVpnConnection": {
       "sku": "EC5BHP9ZANKN9EQD",
       "unit": "Hrs",
       "usd": "0.0500000000",
-      "description": "$0.05 per VPN Connection-Hour"
+      "description": "$0.05 per VPN Connection-Hour",
+      "rate_code": "EC5BHP9ZANKN9EQD.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "VPN-Usage-Hours:ipsec.1",
+      "service_name": "Amazon Virtual Private Cloud",
+      "location": "US East (N. Virginia)"
     },
     "AmazonVPC|VpcEndpoint-Bytes|VpcEndpoint": {
       "sku": "DQYYEZBCWSW5XS2R",
       "unit": "GB",
       "usd": "0.0100000000",
       "tier_end": "1048576",
-      "description": "$0.01 per GB for upto 1 PB monthly data processed by VPC Endpoints"
+      "description": "$0.01 per GB for upto 1 PB monthly data processed by VPC Endpoints",
+      "rate_code": "DQYYEZBCWSW5XS2R.JRTCKXETXF.D7RZ6WCPVW",
+      "usage_type": "USE1-VpcEndpoint-Bytes",
+      "service_name": "Amazon Virtual Private Cloud",
+      "location": "US East (N. Virginia)",
+      "tiers": [
+        {
+          "start": "1048576",
+          "end": "5242880",
+          "usd": "0.0060000000",
+          "rate_code": "DQYYEZBCWSW5XS2R.JRTCKXETXF.RBMR72YW69",
+          "description": "$0.006 per GB for more than 1 PB and less than 5 PB monthly data processed by VPC Endpoints"
+        },
+        {
+          "start": "5242880",
+          "usd": "0.0040000000",
+          "rate_code": "DQYYEZBCWSW5XS2R.JRTCKXETXF.SW9U2ZKBYX",
+          "description": "$0.004 per GB for more than 5 PB monthly data processed by VPC Endpoints"
+        }
+      ]
     },
     "AmazonVPC|VpcEndpoint-Hours|VpcEndpoint": {
       "sku": "EN2N5TATXE673A3B",
       "unit": "Hrs",
       "usd": "0.0100000000",
-      "description": "$0.01 per VPC Endpoint Hour"
+      "description": "$0.01 per VPC Endpoint Hour",
+      "rate_code": "EN2N5TATXE673A3B.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-VpcEndpoint-Hours",
+      "service_name": "Amazon Virtual Private Cloud",
+      "location": "US East (N. Virginia)"
     },
     "awskms|KMS-Keys|": {
       "sku": "U553K98XGDXCYHWS",
       "unit": "Keys",
       "usd": "1.0000000000",
-      "description": "$1 per customer managed KMS key version in US East (N. Virginia)"
+      "description": "$1 per customer managed KMS key version in US East (N. Virginia)",
+      "rate_code": "U553K98XGDXCYHWS.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "us-east-1-KMS-Keys",
+      "service_name": "AWS Key Management Service",
+      "location": "US East (N. Virginia)"
     }
   }
 }

@@ -135,6 +135,7 @@ func Markdown(in Input) string {
 			w("| `%s` | %s | %s | %s | %s | %s |\n", r.Address, r.Action, cell(&r.Before), cell(&r.After), delta, escape(breakdown(r)))
 		}
 		w("\n")
+		billingDetails(w, changed)
 	}
 
 	var unpricedRows []estimate.Resource
@@ -184,6 +185,42 @@ func Markdown(in Input) string {
 	return b.String()
 }
 
+// billingDetails lists, in a collapsed block, the bill keys of the lines in
+// the Breakdown column: SKU, usage type with the region prefix, billing rule
+// and the description AWS prints on the invoice.
+func billingDetails(w func(string, ...any), rows []estimate.Resource) {
+	n := 0
+	for _, r := range rows {
+		n += len(shownSide(r).Lines)
+	}
+	if n == 0 {
+		return
+	}
+	w("<details><summary>Billing keys of %s (SKU and invoice description)</summary>\n\n", plural(n, "cost line", "cost lines"))
+	w("| Resource | Line | SKU | Usage type | Billing rule | Invoice description |\n|---|---|---|---|---|---|\n")
+	for _, r := range rows {
+		for _, l := range shownSide(r).Lines {
+			w("| `%s` | %s | `%s` | `%s` | %s | %s |\n", r.Address, escape(l.Name), dash(l.SKU), dash(l.UsageType), dash(l.BillingRule), escape(dash(l.BillingDescription)))
+		}
+	}
+	w("\n</details>\n\n")
+}
+
+// shownSide is the side the Breakdown column describes.
+func shownSide(r estimate.Resource) *estimate.Side {
+	if !r.After.Exists {
+		return &r.Before
+	}
+	return &r.After
+}
+
+func dash(s string) string {
+	if s == "" {
+		return "–"
+	}
+	return s
+}
+
 func statusText(s string) string {
 	switch s {
 	case StatusOverCeiling:
@@ -211,16 +248,21 @@ func yesNo(b bool) string {
 // JSON report types.
 
 type jsonLine struct {
-	Name      string       `json:"name"`
-	PriceKey  string       `json:"price_key"`
-	UnitPrice json.Number  `json:"unit_price"`
-	Quantity  json.Number  `json:"quantity"`
-	Unit      string       `json:"unit"`
-	Factor    *json.Number `json:"factor,omitempty"`
-	Monthly   json.Number  `json:"monthly"`
-	Premise   string       `json:"premise,omitempty"`
-	Declared  bool         `json:"declared"`
-	Note      string       `json:"note,omitempty"`
+	Name               string       `json:"name"`
+	PriceKey           string       `json:"price_key"`
+	SKU                string       `json:"sku"`
+	UsageType          string       `json:"usage_type"`
+	RateCode           string       `json:"rate_code"`
+	BillingDescription string       `json:"billing_description"`
+	BillingRule        string       `json:"billing_rule"`
+	UnitPrice          json.Number  `json:"unit_price"`
+	Quantity           json.Number  `json:"quantity"`
+	Unit               string       `json:"unit"`
+	Factor             *json.Number `json:"factor,omitempty"`
+	Monthly            json.Number  `json:"monthly"`
+	Premise            string       `json:"premise,omitempty"`
+	Declared           bool         `json:"declared"`
+	Note               string       `json:"note,omitempty"`
 }
 
 type jsonSide struct {
@@ -280,19 +322,25 @@ func numPtr(r *big.Rat) *json.Number {
 
 func exact(r *big.Rat) json.Number { return json.Number(money.Trim(r)) }
 
+func toJSONLine(l estimate.Line) jsonLine {
+	jl := jsonLine{Name: l.Name, PriceKey: l.PriceKey, SKU: l.SKU, UsageType: l.UsageType, RateCode: l.RateCode,
+		BillingDescription: l.BillingDescription, BillingRule: l.BillingRule,
+		UnitPrice: exact(l.UnitPrice), Quantity: exact(l.Quantity),
+		Unit: l.Unit, Monthly: num(l.Monthly), Premise: l.Premise, Declared: l.Declared, Note: l.Note}
+	if l.Factor != nil {
+		f := exact(l.Factor)
+		jl.Factor = &f
+	}
+	return jl
+}
+
 func toJSONSide(s estimate.Side) *jsonSide {
 	if !s.Exists {
 		return nil
 	}
 	out := &jsonSide{Monthly: num(s.Monthly), Unpriced: s.Unpriced, Lines: []jsonLine{}}
 	for _, l := range s.Lines {
-		jl := jsonLine{Name: l.Name, PriceKey: l.PriceKey, UnitPrice: exact(l.UnitPrice), Quantity: exact(l.Quantity),
-			Unit: l.Unit, Monthly: num(l.Monthly), Premise: l.Premise, Declared: l.Declared, Note: l.Note}
-		if l.Factor != nil {
-			f := exact(l.Factor)
-			jl.Factor = &f
-		}
-		out.Lines = append(out.Lines, jl)
+		out.Lines = append(out.Lines, toJSONLine(l))
 	}
 	return out
 }
@@ -328,6 +376,57 @@ func JSON(in Input) ([]byte, error) {
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(r); err != nil {
 		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// LineKind is the "kind" of every JSON Lines document.
+const LineKind = "costgate.line"
+
+// jsonLineDoc is one cost line with the report fields a standalone query
+// needs. The line fields are the same as in the JSON report.
+type jsonLineDoc struct {
+	SchemaVersion int    `json:"schema_version"`
+	Kind          string `json:"kind"`
+	Tool          string `json:"tool"`
+	Version       string `json:"version"`
+	Region        string `json:"region"`
+	Currency      string `json:"currency"`
+	PricingAsOf   string `json:"pricing_as_of"`
+	PricingSHA256 string `json:"pricing_sha256"`
+	Address       string `json:"address"`
+	Type          string `json:"type"`
+	Action        string `json:"action"`
+	Side          string `json:"side"`
+	jsonLine
+}
+
+// JSONLines renders one compact JSON document per cost line and per side
+// (before, then after), in the order of the report. Unpriced and zero-cost
+// resources have no cost line and appear only in the JSON report.
+func JSONLines(in Input) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	for _, r := range in.Result.Resources {
+		for _, sd := range []struct {
+			name string
+			side estimate.Side
+		}{{"before", r.Before}, {"after", r.After}} {
+			if !sd.side.Exists {
+				continue
+			}
+			for _, l := range sd.side.Lines {
+				doc := jsonLineDoc{
+					SchemaVersion: JSONSchemaVersion, Kind: LineKind, Tool: "costgate", Version: in.Version,
+					Region: in.Result.Region, Currency: "USD", PricingAsOf: in.Pricing.AsOf, PricingSHA256: in.Pricing.SHA256,
+					Address: r.Address, Type: r.Type, Action: string(r.Action), Side: sd.name, jsonLine: toJSONLine(l),
+				}
+				if err := enc.Encode(doc); err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 	return buf.Bytes(), nil
 }

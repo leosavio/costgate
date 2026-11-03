@@ -20,6 +20,7 @@ type comp struct {
 	premise  string   // usage field when the quantity is a premise
 	declared bool     // false: premise missing, quantity is 0
 	note     string
+	rule     string // BillingFixedHourly, BillingFixedMonthly or BillingUsage
 }
 
 // side is the estimate of one side of a change.
@@ -145,16 +146,16 @@ func hourly(name, key string, u usage.Resolved, mult *big.Rat) comp {
 	if mult != nil {
 		q = money.Mul(q, mult)
 	}
-	return comp{name: name, key: key, qty: q, unit: "h", declared: true}
+	return comp{name: name, key: key, qty: q, unit: "h", declared: true, rule: BillingFixedHourly}
 }
 
 func gbComp(name, key string, u usage.Resolved) comp {
-	return comp{name: name, key: key, qty: u.GB.V, unit: "GB", premise: "gb_per_month", declared: u.GB.Declared}
+	return comp{name: name, key: key, qty: u.GB.V, unit: "GB", premise: "gb_per_month", declared: u.GB.Declared, rule: BillingUsage}
 }
 
 func monthly(name, key, unit, note string) estimator {
 	return func(attrs, usage.Resolved) side {
-		return side{comps: []comp{{name: name, key: key, qty: money.Int(1), unit: unit, declared: true, note: note}}}
+		return side{comps: []comp{{name: name, key: key, qty: money.Int(1), unit: unit, declared: true, note: note, rule: BillingFixedMonthly}}}
 	}
 }
 
@@ -185,7 +186,7 @@ func volumeComp(name, volType string, size *big.Rat, iops, throughput *big.Rat) 
 			return comp{}, "gp3 throughput above the 125 MiB/s baseline is not modeled"
 		}
 	}
-	return comp{name: name + " (" + volType + ")", key: catalog.Key("AmazonEC2", ut, ""), qty: size, unit: "GB-month", declared: true}, ""
+	return comp{name: name + " (" + volType + ")", key: catalog.Key("AmazonEC2", ut, ""), qty: size, unit: "GB-month", declared: true, rule: BillingFixedMonthly}, ""
 }
 
 func instance(forceSpot bool) estimator {
@@ -210,6 +211,8 @@ func instance(forceSpot bool) estimator {
 			c.factor = money.Sub(money.Int(1), u.SpotDiscount.V)
 			c.premise = "spot_discount"
 			c.declared = true
+			// The Spot price is set by the market, not by the price list.
+			c.rule = BillingUsage
 			c.note = "on-demand × (1 − spot_discount " + money.Trim(u.SpotDiscount.V) + ")"
 		}
 		s.comps = append(s.comps, c)
@@ -350,7 +353,7 @@ func resolverEndpoint(a attrs, u usage.Resolved) side {
 
 func s3Bucket(a attrs, u usage.Resolved) side {
 	c := comp{name: "S3 Standard storage", key: keyS3Standard, qty: u.GB.V, unit: "GB-month",
-		premise: "gb_per_month", declared: u.GB.Declared, note: "first 50 TB tier; requests not priced"}
+		premise: "gb_per_month", declared: u.GB.Declared, note: "first 50 TB tier; requests not priced", rule: BillingUsage}
 	return side{comps: []comp{c}}
 }
 
@@ -371,7 +374,7 @@ func cloudTrail(a attrs, u usage.Resolved) side {
 		return unpriced("CloudTrail Insights is not modeled")
 	}
 	return side{comps: []comp{{name: "paid events recorded", key: keyTrailEvents, qty: u.Events.V, unit: "events",
-		premise: "events_per_month", declared: u.Events.Declared,
+		premise: "events_per_month", declared: u.Events.Declared, rule: BillingUsage,
 		note: "first copy of management events is free; declare only paid events"}}}
 }
 
@@ -399,9 +402,9 @@ func managementOnly(sel attrs) bool {
 func privateCA(a attrs, u usage.Resolved) side {
 	mode, _ := a.str("usage_mode")
 	if mode == "SHORT_LIVED_CERTIFICATE" {
-		return side{comps: []comp{{name: "Private CA (short-lived mode)", key: keyPCAShortLived, qty: money.Int(1), unit: "CA-month", declared: true, note: "certificates not priced"}}}
+		return side{comps: []comp{{name: "Private CA (short-lived mode)", key: keyPCAShortLived, qty: money.Int(1), unit: "CA-month", declared: true, note: "certificates not priced", rule: BillingFixedMonthly}}}
 	}
-	return side{comps: []comp{{name: "Private CA (general-purpose mode)", key: keyPCAGeneral, qty: money.Int(1), unit: "CA-month", declared: true, note: "certificates not priced"}}}
+	return side{comps: []comp{{name: "Private CA (general-purpose mode)", key: keyPCAGeneral, qty: money.Int(1), unit: "CA-month", declared: true, note: "certificates not priced", rule: BillingFixedMonthly}}}
 }
 
 func acmCertificate(a attrs, u usage.Resolved) side {

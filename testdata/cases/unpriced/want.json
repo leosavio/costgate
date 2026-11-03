@@ -6,7 +6,7 @@
   "currency": "USD",
   "pricing": {
     "as_of": "2026-11-03T00:09:47Z",
-    "sha256": "383a4cb3421fe8c6ecfb1a3ea20d069d653eba464f9167ae741aba8138526677",
+    "sha256": "cbfe2a28af240aa203cf7ef20f87e2ad41c659d0ef1e0abbaeca700b6f74f273",
     "sources": [
       {
         "service": "AWSCertificateManager",
@@ -122,6 +122,11 @@
           {
             "name": "customer managed key",
             "price_key": "awskms|KMS-Keys|",
+            "sku": "U553K98XGDXCYHWS",
+            "usage_type": "us-east-1-KMS-Keys",
+            "rate_code": "U553K98XGDXCYHWS.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$1 per customer managed KMS key version in US East (N. Virginia)",
+            "billing_rule": "fixed_monthly",
             "unit_price": 1,
             "quantity": 1,
             "unit": "key-month",
@@ -192,6 +197,11 @@
           {
             "name": "S3 Standard storage",
             "price_key": "AmazonS3|TimedStorage-ByteHrs|",
+            "sku": "WP9ANXZGBYYSGJEA",
+            "usage_type": "TimedStorage-ByteHrs",
+            "rate_code": "WP9ANXZGBYYSGJEA.JRTCKXETXF.PGHJ3S3EYE",
+            "billing_description": "$0.023 per GB - first 50 TB / month of storage used",
+            "billing_rule": "usage",
             "unit_price": 0.023,
             "quantity": 0,
             "unit": "GB-month",

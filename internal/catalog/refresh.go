@@ -158,7 +158,7 @@ func supportedRegions() []string {
 	return out
 }
 
-var requiredColumns = []string{"SKU", "TermType", "PriceDescription", "StartingRange", "EndingRange", "Unit", "PricePerUnit", "Currency", "usageType", "operation"}
+var requiredColumns = []string{"SKU", "TermType", "PriceDescription", "StartingRange", "EndingRange", "Unit", "PricePerUnit", "Currency", "usageType", "operation", "RateCode", "serviceName", "Location"}
 
 // extract reads one CSV offer file: five metadata lines, a header, then one
 // row per price dimension.
@@ -217,6 +217,8 @@ func extract(r io.Reader, k fileKey, region string, prefixes []string, rules []R
 	}
 
 	prices := map[string]Price{}
+	tiers := map[string]map[string]Tier{} // key -> start -> tier
+	tierSKU := map[string]string{}
 	hits := make([]int, len(rules))
 	for {
 		rec, err := cr.Read()
@@ -226,14 +228,16 @@ func extract(r io.Reader, k fileKey, region string, prefixes []string, rules []R
 		if err != nil {
 			return src, nil, err
 		}
-		if field(rec, "TermType") != "OnDemand" || field(rec, "StartingRange") != "0" {
+		if field(rec, "TermType") != "OnDemand" {
 			continue
 		}
 		if k.scope == ScopeRegion && hasRegionCol && regionCol < len(rec) && rec[regionCol] != region {
 			continue
 		}
-		ut := normalizeUsageType(field(rec, "usageType"), prefixes)
+		rawUT := field(rec, "usageType")
+		ut := normalizeUsageType(rawUT, prefixes)
 		op := field(rec, "operation")
+		start := field(rec, "StartingRange")
 		for i, rule := range rules {
 			if rule.UsagePrefix {
 				if !strings.HasPrefix(ut, rule.UsageType) {
@@ -262,17 +266,42 @@ func extract(r io.Reader, k fileKey, region string, prefixes []string, rules []R
 			if _, err := money.Parse(usd); err != nil {
 				return src, nil, fmt.Errorf("rule %s: sku %s: %w", rule, field(rec, "SKU"), err)
 			}
+			end := field(rec, "EndingRange")
+			if end == "Inf" {
+				end = ""
+			}
+			key := Key(k.service, ut, op)
+			if start != "0" {
+				// A later tier: kept for the bill, not used by the estimate.
+				if _, err := money.Parse(start); err != nil {
+					return src, nil, fmt.Errorf("rule %s: sku %s: StartingRange %q: %w", rule, field(rec, "SKU"), start, err)
+				}
+				t := Tier{Start: start, End: end, USD: usd, RateCode: field(rec, "RateCode"), Description: field(rec, "PriceDescription")}
+				if tiers[key] == nil {
+					tiers[key] = map[string]Tier{}
+				}
+				if prev, dup := tiers[key][start]; dup && prev != t {
+					return src, nil, fmt.Errorf("rule %s: key %s tier %s is ambiguous (rate code %s and %s); tighten the rule", rule, key, start, prev.RateCode, t.RateCode)
+				}
+				tiers[key][start] = t
+				if prev, ok := tierSKU[key]; ok && prev != field(rec, "SKU") {
+					return src, nil, fmt.Errorf("rule %s: key %s has tiers from sku %s and %s; tighten the rule", rule, key, prev, field(rec, "SKU"))
+				}
+				tierSKU[key] = field(rec, "SKU")
+				continue
+			}
 			p := Price{
 				SKU:         field(rec, "SKU"),
 				Unit:        field(rec, "Unit"),
 				USD:         usd,
+				TierEnd:     end,
 				Description: field(rec, "PriceDescription"),
+				RateCode:    field(rec, "RateCode"),
+				UsageType:   rawUT,
+				ServiceName: field(rec, "serviceName"),
+				Location:    field(rec, "Location"),
 			}
-			if end := field(rec, "EndingRange"); end != "Inf" {
-				p.TierEnd = end
-			}
-			key := Key(k.service, ut, op)
-			if prev, dup := prices[key]; dup && prev != p {
+			if prev, dup := prices[key]; dup && !sameFirstTier(prev, p) {
 				return src, nil, fmt.Errorf("rule %s: key %s is ambiguous (sku %s and %s); tighten the rule", rule, key, prev.SKU, p.SKU)
 			}
 			prices[key] = p
@@ -283,6 +312,25 @@ func extract(r io.Reader, k fileKey, region string, prefixes []string, rules []R
 		if hits[i] == 0 {
 			return src, nil, fmt.Errorf("rule %s matched no on-demand price; the offer changed, update internal/catalog/rules.go", rule)
 		}
+	}
+	for key, byStart := range tiers {
+		p, ok := prices[key]
+		if !ok {
+			return src, nil, fmt.Errorf("key %s has a tier starting above 0 but no first tier", key)
+		}
+		if tierSKU[key] != p.SKU {
+			return src, nil, fmt.Errorf("key %s: tiers of sku %s do not belong to the first tier sku %s", key, tierSKU[key], p.SKU)
+		}
+		p.Tiers = make([]Tier, 0, len(byStart))
+		for _, t := range byStart {
+			p.Tiers = append(p.Tiers, t)
+		}
+		sort.Slice(p.Tiers, func(i, j int) bool {
+			a, _ := money.Parse(p.Tiers[i].Start)
+			b, _ := money.Parse(p.Tiers[j].Start)
+			return a.Cmp(b) < 0
+		})
+		prices[key] = p
 	}
 	return src, prices, nil
 }
