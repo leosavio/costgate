@@ -1,4 +1,5 @@
 {
+  "test_marker": "refresh-pricing dry run 41677361547; do not merge",
   "schema_version": 1,
   "region": "us-east-1",
   "currency": "USD",
