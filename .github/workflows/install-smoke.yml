@@ -1,0 +1,201 @@
+name: install-smoke
+
+# Installs a published release the way a user would and checks it:
+# Homebrew tap, go install and the signed tarball, on Linux/macOS x amd64/arm64.
+# Each install runs scripts/smoke-check.sh (from the workflow ref) against the
+# testdata of the release tag: version, pricing verify and the baseline golden.
+#
+# Triggers:
+# - workflow_run after release.yml succeeds. A release created by release.yml
+#   with GITHUB_TOKEN does not emit a `release` event to other workflows, and
+#   the tap is updated only at the end of that run.
+# - release: published, for a release created by a person.
+# - weekly, against the latest release (catches tap, proxy or image drift).
+# - workflow_dispatch with a version (default: latest release).
+
+on:
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+  release:
+    types: [published]
+  schedule:
+    - cron: "43 7 * * 2"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag (vX.Y.Z) or latest"
+        required: false
+        default: latest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-smoke-${{ github.event.release.tag_name || github.event.workflow_run.head_branch || inputs.version || 'latest' }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      latest: ${{ steps.tag.outputs.latest }}
+    steps:
+      - id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RUN_TAG: ${{ github.event.workflow_run.head_branch }}
+          INPUT: ${{ inputs.version }}
+        run: |
+          set -eu
+          case "$EVENT" in
+            release) tag="$RELEASE_TAG" ;;
+            workflow_run) tag="$RUN_TAG" ;;
+            *) tag="${INPUT:-latest}" ;;
+          esac
+          latest="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          [ "$tag" = latest ] && tag="$latest"
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "invalid tag: $tag"; exit 1
+          fi
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json tagName >/dev/null
+          is_latest=false; [ "$tag" = "$latest" ] && is_latest=true
+          echo "tag $tag (latest release: $latest)"
+          { echo "tag=$tag"; echo "version=${tag#v}"; echo "latest=$is_latest"; } >> "$GITHUB_OUTPUT"
+
+  smoke:
+    name: ${{ matrix.method }} (${{ matrix.runner }}) ${{ needs.resolve.outputs.tag }}
+    needs: resolve
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Runner labels: https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel]
+        method: [brew, go, tarball]
+    env:
+      TAG: ${{ needs.resolve.outputs.tag }}
+      VERSION: ${{ needs.resolve.outputs.version }}
+      IS_LATEST: ${{ needs.resolve.outputs.latest }}
+      HOMEBREW_NO_ANALYTICS: "1"
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+    steps:
+      # Smoke script from the workflow ref; for a `release` event the ref is
+      # the tag itself, which may predate the script.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.repository.default_branch || github.sha }}
+          path: ci
+          persist-credentials: false
+
+      # Expected output (testdata) from the release tag.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+          path: src
+          persist-credentials: false
+
+      - name: platform
+        run: |
+          set -eu
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          case "$(uname -m)" in
+            x86_64 | amd64) arch=amd64 ;;
+            aarch64 | arm64) arch=arm64 ;;
+            *) echo "unexpected arch $(uname -m)"; exit 1 ;;
+          esac
+          if [ "$os" = darwin ]; then
+            translated="$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)"
+            [ "$translated" = 0 ] || { echo "running under Rosetta"; exit 1; }
+            echo "SHA256_CHECK=shasum -a 256 -c -" >> "$GITHUB_ENV"
+          else
+            echo "SHA256_CHECK=sha256sum -c -" >> "$GITHUB_ENV"
+          fi
+          echo "platform $os/$arch"
+          { echo "PLATFORM=${os}_${arch}"; echo "OS=$os"; } >> "$GITHUB_ENV"
+
+      # Homebrew is preinstalled on the macOS images and on ubuntu-24.04
+      # (/home/linuxbrew, off PATH). Elsewhere it is installed from a pinned
+      # commit of Homebrew/install with the script checksum verified.
+      - name: install (brew)
+        if: matrix.method == 'brew'
+        env:
+          BREW_INSTALL_SHA: d6a2423c5973e04b45a5f17dc1948f6c9e5e651a # Homebrew/install HEAD 2026-11-03
+          BREW_INSTALL_SUM: 5f333bbe53bc490e51e7ccb1df8779b3dd6ee73a1a7379efda216edb08ccb148
+        run: |
+          set -eu
+          for p in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
+            if [ -x "$p" ]; then eval "$("$p" shellenv)"; break; fi
+          done
+          if ! command -v brew >/dev/null; then
+            [ "$OS" = linux ] || { echo "Homebrew missing on macOS image"; exit 1; }
+            echo "::notice::Homebrew not in the image; installing from Homebrew/install@${BREW_INSTALL_SHA}"
+            script="$RUNNER_TEMP/brew-install.sh"
+            curl -fsSL -o "$script" "https://raw.githubusercontent.com/Homebrew/install/${BREW_INSTALL_SHA}/install.sh"
+            echo "${BREW_INSTALL_SUM}  ${script}" | sha256sum -c -
+            NONINTERACTIVE=1 bash "$script"
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          fi
+          brew --version
+          brew tap leosavio/tap
+          tap_version="$(brew info --json=v2 leosavio/tap/costgate | jq -r '.formulae[0].versions.stable')"
+          if [ "$tap_version" != "$VERSION" ]; then
+            if [ "$IS_LATEST" = true ]; then echo "tap serves $tap_version, want $VERSION"; exit 1; fi
+            echo "::notice::tap serves $tap_version and $TAG is not the latest release: brew path skipped"
+            echo "SKIP=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          brew install leosavio/tap/costgate
+          echo "COSTGATE_BIN=$(brew --prefix)/bin/costgate" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: matrix.method == 'go'
+        with:
+          go-version-file: src/go.mod
+          cache: false
+
+      - name: install (go install)
+        if: matrix.method == 'go'
+        run: |
+          set -eu
+          export GOBIN="$RUNNER_TEMP/gobin"
+          cd "$RUNNER_TEMP"
+          go install "github.com/leosavio/costgate/cmd/costgate@${TAG}"
+          echo "COSTGATE_BIN=$GOBIN/costgate" >> "$GITHUB_ENV"
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        if: matrix.method == 'tarball'
+        with:
+          cosign-release: v3.1.4
+
+      - name: install (tarball + checksum + cosign)
+        if: matrix.method == 'tarball'
+        run: |
+          set -eu
+          dir="$RUNNER_TEMP/release"
+          mkdir -p "$dir" && cd "$dir"
+          file="costgate_${VERSION}_${PLATFORM}.tar.gz"
+          base="https://github.com/leosavio/costgate/releases/download/${TAG}"
+          for f in checksums.txt checksums.txt.sigstore.json "$file"; do
+            curl -fsSLO "${base}/${f}"
+          done
+          cosign verify-blob --bundle checksums.txt.sigstore.json \
+            --certificate-identity "https://github.com/leosavio/costgate/.github/workflows/release.yml@refs/tags/${TAG}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+          line="$(grep " ${file}\$" checksums.txt)"
+          echo "$line" | $SHA256_CHECK
+          tar -xzf "$file" costgate
+          echo "COSTGATE_BIN=$dir/costgate" >> "$GITHUB_ENV"
+
+      - name: check
+        if: env.SKIP != '1'
+        working-directory: src
+        run: sh ../ci/scripts/smoke-check.sh "$COSTGATE_BIN" "$VERSION"
