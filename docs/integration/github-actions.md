@@ -77,7 +77,7 @@ jobs:
       contents: read
       pull-requests: write # only job that comments on the PR
     env:
-      COSTGATE_VERSION: 0.1.1
+      COSTGATE_VERSION: 0.2.0
       STACK_DIR: stacks/org-services
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -163,4 +163,5 @@ jobs:
 | Fork PRs | get neither `id-token` nor `pull-requests: write`; do not accept fork PRs for stacks |
 | OpenTofu | `tofu show -json` emits the same format (`format_version` 1.x) |
 | Upgrading costgate | change `COSTGATE_VERSION`; the verification command stays the same |
-| Comment size | GitHub caps comments at 65,536 characters; a plan with hundreds of changed resources may exceed it (not verified) |
+| Comment size | GitHub caps comments at 65,536 characters; a plan with hundreds of changed resources may exceed it (not verified). Since 0.2.0 the collapsed "Billing keys" block adds one row per cost line |
+| Bill keys | `--json-lines cost.jsonl` writes one document per cost line with `sku`, `usage_type`, `rate_code` and `billing_rule`, for Athena or `jq`; the JSON report has the same fields |

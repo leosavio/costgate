@@ -8,6 +8,22 @@ detalhes de implementação decididos pelo agente dentro desse escopo.
 > Nota 2026-11-03: o operador confirmou D4 (exit 2 tem precedência sobre 1: estimativa incompleta
 > não prova que o teto foi respeitado) e D5 (não precificado em `no-op`/`delete` não bloqueia,
 > senão toda stack com recurso legado fora do mapa exigiria `cost-approved`).
+>
+> Nota 2026-11-03 (camada 1, issue leosavio-org#26, v0.2.0): D2 continua valendo, com duas
+> adições. (a) O snapshot passou a `schema_version` 2: cada preço guarda também `rate_code`,
+> `usage_type` bruto (com prefixo de região), `service_name`, `location` e as faixas além da
+> primeira (`tiers`). Todo campo novo é `omitempty`, então um snapshot v1 decodifica na mesma
+> estrutura com o mesmo `sha256`: o binário 0.2.x lê v1 e v2 (com `usage_type` e `rate_code`
+> vazios no v1) e recusa campo desconhecido e versão fora de 1..2, conferindo a versão antes dos
+> campos; o 0.1.x recusa o v2 com exit 3 (`json: unknown field "rate_code"`, verificado com o binário
+> v0.1.1).
+> O snapshot embutido acompanha cada binário; a questão só existe para `--pricing`. (b) Cada linha
+> de custo do relatório JSON (`schema_version` 1, só acréscimo) traz `sku`, `usage_type`,
+> `rate_code`, `billing_description` e `billing_rule` (`fixed_hourly`, `fixed_monthly`, `usage`),
+> as chaves do CUR 2.0 (`product_sku`, `line_item_usage_type`, `pricing_rate_code`); `--json-lines`
+> grava um documento por linha para o Athena. O cálculo não mudou: a estimativa usa a primeira
+> faixa, e o total dos goldens é o mesmo da v0.1.1. `record`, `ledger` e conciliação com a fatura
+> (camadas 2 e 3) não foram decididos.
 
 ## Contexto
 

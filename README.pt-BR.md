@@ -11,7 +11,9 @@ recurso sem preço conhecido. Binário único em Go, offline, sem credencial AWS
 - Preços vêm de um **snapshot versionado** da [AWS Price List Bulk API](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/price-changes.html) pública, embutido no binário. Mudança de preço entra por PR, com diff auditável.
 - **Fail-closed**: recurso criado ou alterado que a ferramenta não sabe precificar falha o check (exit 2). Nenhum recurso desconhecido vira "US$ 0" em silêncio.
 - **Determinístico**: mesma entrada, mesma saída byte a byte, em arm64 e amd64 (aritmética decimal exata com `math/big`).
-- Saída em Markdown (comentário de PR) e JSON.
+- Saída em Markdown (comentário de PR), JSON e JSON Lines. Cada linha de custo traz as chaves da
+  fatura da AWS (SKU, usage type, rate code, descrição da fatura), para casar com o Cost and Usage
+  Report.
 
 Decisões: [ADR-001 (Go, snapshot da Bulk API e fail-closed)](docs/adr/001-go-snapshot-bulk-api-e-fail-closed.md).
 
@@ -20,7 +22,7 @@ Decisões: [ADR-001 (Go, snapshot da Bulk API e fail-closed)](docs/adr/001-go-sn
 Release (darwin/linux, arm64/amd64), com verificação de checksum e assinatura keyless:
 
 ```sh
-v=0.1.1; os=darwin; arch=arm64
+v=0.2.0; os=darwin; arch=arm64
 base="https://github.com/leosavio/costgate/releases/download/v${v}"
 curl -fsSLO "${base}/costgate_${v}_${os}_${arch}.tar.gz"
 curl -fsSLO "${base}/checksums.txt"
@@ -70,7 +72,7 @@ O script compara com o testdata da tag instalada:
 git clone -q --depth 1 --branch "v${v}" https://github.com/leosavio/costgate costgate-src && cd costgate-src
 curl -fsSLO https://raw.githubusercontent.com/leosavio/costgate/main/scripts/smoke-check.sh
 sh smoke-check.sh "$(command -v costgate)" "${v}"
-# ok version: costgate 0.1.1
+# ok version: costgate 0.2.0
 # ok us-east-1: 1415 prices, ...
 # ok baseline: exit 1, ### costgate: ❌ +US$ 414.16/month · over ceiling
 ```
@@ -95,6 +97,7 @@ costgate diff --plan - --format json < plan.json
 | `--pricing` | embutido | outro snapshot (gerado por `pricing refresh`) |
 | `--format` | `markdown` | `markdown` ou `json` no stdout |
 | `--markdown-out`, `--json-out` | — | grava também em arquivo |
+| `--json-lines` | — | grava também um documento JSON por linha de custo ([JSON Lines](#json-lines)) |
 
 | Exit | Significado |
 |---|---|
@@ -193,6 +196,22 @@ Gerado de [`testdata/cases/changes`](testdata/cases/changes) com o snapshot embu
 | `aws_instance.batch` | update | 25.68 | 10.13 | -15.55 | compute on-demand, Linux t4g.small: 240 h × $0.0168 = 4.03<br>root volume (gp3): 20 GB-month × $0.08 = 1.60<br>ebs_block_device[0] (st1): 100 GB-month × $0.045 = 4.50 |
 | `aws_nat_gateway.main` | delete | 32.85 | – | -32.85 | NAT gateway hours: 730 h × $0.045 = 32.85<br>NAT data processed: usage not declared (`gb_per_month`) |
 
+<details><summary>Billing keys of 9 cost lines (SKU and invoice description)</summary>
+
+| Resource | Line | SKU | Usage type | Billing rule | Invoice description |
+|---|---|---|---|---|---|
+| `aws_ebs_volume.data` | EBS volume (gp3) | `JG3KUJMBRGHV3N8G` | `EBS:VolumeUsage.gp3` | fixed_monthly | $0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia) |
+| `aws_eip.nat` | public IPv4 address | `4GQUNXTFWVSGPUZK` | `USE1-PublicIPv4:InUseAddress` | fixed_hourly | $0.005 per In-use public IPv4 address per hour |
+| `aws_instance.app` | compute Spot, Linux t4g.small | `9GWX7R3VJUG9P8Y8` | `BoxUsage:t4g.small` | usage | $0.0168 per On Demand Linux t4g.small Instance Hour |
+| `aws_instance.app` | root volume (gp3) | `JG3KUJMBRGHV3N8G` | `EBS:VolumeUsage.gp3` | fixed_monthly | $0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia) |
+| `aws_instance.batch` | compute on-demand, Linux t4g.small | `9GWX7R3VJUG9P8Y8` | `BoxUsage:t4g.small` | fixed_hourly | $0.0168 per On Demand Linux t4g.small Instance Hour |
+| `aws_instance.batch` | root volume (gp3) | `JG3KUJMBRGHV3N8G` | `EBS:VolumeUsage.gp3` | fixed_monthly | $0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia) |
+| `aws_instance.batch` | ebs_block_device[0] (st1) | `YQT3C842QHBG6XCU` | `EBS:VolumeUsage.st1` | fixed_monthly | $0.045 per GB-month of Throughput Optimized HDD (st1) provisioned storage - US East (Northern Virginia) |
+| `aws_nat_gateway.main` | NAT gateway hours | `M2YSHUBETB3JX4M4` | `NatGateway-Hours` | fixed_hourly | $0.045 per NAT Gateway Hour |
+| `aws_nat_gateway.main` | NAT data processed | `59S5R83GFPUAGVR5` | `NatGateway-Bytes` | usage | $0.045 per GB Data Processed by NAT Gateways |
+
+</details>
+
 #### Usage premises not declared (counted as 0)
 
 - `aws_nat_gateway.main`: NAT data processed, set `gb_per_month` in the usage file
@@ -212,7 +231,49 @@ Gerado de [`testdata/cases/changes`](testdata/cases/changes) com o snapshot embu
 
 </details>
 
-<sub>costgate 0.1.0 · AWS Price List Bulk API snapshot `us-east-1` as of 2026-11-03T00:09:47Z (sha256 `799e92889b4e`) · on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included.</sub>
+<sub>costgate 0.2.0 · AWS Price List Bulk API snapshot `us-east-1` as of 2026-11-03T00:09:47Z (sha256 `b27de59b0883`) · on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included.</sub>
+
+## Relatório JSON
+
+`--format json` (stdout) e `--json-out` (arquivo) gravam o relatório completo, `schema_version` 1.
+Dentro de um `schema_version` só entram campos novos; remover campo ou mudar significado sobe a
+versão. Cada elemento de `resources[].before.lines` e `resources[].after.lines` é uma linha de custo:
+
+| Campo | Desde | Significado |
+|---|---|---|
+| `name`, `unit`, `quantity`, `unit_price`, `factor`, `monthly` | 0.1.0 | a conta mostrada na coluna Breakdown |
+| `price_key` | 0.1.0 | `offer code\|usage type sem prefixo de região\|operation`, chave do snapshot |
+| `premise`, `declared`, `note` | 0.1.0 | premissa de uso por trás da quantidade e se o arquivo de premissas a declarou |
+| `sku` | 0.2.0 | SKU da Price List, igual ao `product_sku` do CUR 2.0 |
+| `usage_type` | 0.2.0 | usage type bruto, com prefixo de região, como na fatura (`USE1-PublicIPv4:InUseAddress`, `us-east-1-KMS-Keys`; EC2 e S3 não têm prefixo em us-east-1) |
+| `rate_code` | 0.2.0 | rate code da faixa usada na estimativa (a primeira), igual ao `pricing_rate_code` do CUR 2.0 |
+| `billing_description` | 0.2.0 | descrição do preço, o texto que a AWS imprime na linha da fatura |
+| `billing_rule` | 0.2.0 | `fixed_hourly`, `fixed_monthly` ou `usage` (abaixo) |
+
+| `billing_rule` | A AWS cobra | Linhas |
+|---|---|---|
+| `fixed_hourly` | por hora em que o recurso existe | NAT gateway, IPv4 pública, endpoint interface, attachments de TGW, VPN, ENIs do Resolver, instância on-demand |
+| `fixed_monthly` | por mês em que o recurso existe | hosted zone, chave KMS, Private CA, GB-mês provisionado de EBS |
+| `usage` | por tráfego, dado armazenado, evento ou preço de mercado; a quantidade ou o preço é premissa | dado processado, armazenamento S3, eventos do CloudTrail, instância Spot |
+
+As linhas `fixed_*` são as que devem casar com a fatura por SKU e quantidade. A projeção usa
+730 h/mês; a fatura usa as horas do mês do calendário, então o valor mensal difere mesmo quando a
+linha casa. Com snapshot gravado pelo costgate 0.1.x (`schema_version` 1), `usage_type` e
+`rate_code` saem como string vazia.
+
+### JSON Lines
+
+`--json-lines <arquivo>` grava um documento JSON compacto por linha de custo e por lado (`before`,
+depois `after`), na ordem do relatório: o formato que o JSON SerDe do Athena lê
+([Athena: JSON](https://docs.aws.amazon.com/athena/latest/ug/parsing-json-data.html)) e que
+`jq -c` produz. Cada documento é autocontido: repete `schema_version`, a versão do costgate, data e
+hash do snapshot, e endereço, tipo e ação do recurso. Recurso não precificado ou de custo zero não
+tem linha de custo; aparece só no relatório JSON. Uma linha de `testdata/cases/changes` com o
+snapshot embutido:
+
+```json
+{"schema_version":1,"kind":"costgate.line","tool":"costgate","version":"0.2.0","region":"us-east-1","currency":"USD","pricing_as_of":"2026-11-03T00:09:47Z","pricing_sha256":"b27de59b08836c188cfa5bb1c758b2246392b90280def70f26d1c49f27daa0be","address":"module.dns.aws_route53_zone.this[\"example.com\"]","type":"aws_route53_zone","action":"no-op","side":"after","name":"hosted zone","price_key":"AmazonRoute53|HostedZone|","sku":"KVPGEJE88UW8S779","usage_type":"HostedZone","rate_code":"KVPGEJE88UW8S779.JRTCKXETXF.G2A93NZ7DT","billing_description":"$0.50 per Hosted Zone for the first 25 Hosted Zones","billing_rule":"fixed_monthly","unit_price":0.5,"quantity":1,"unit":"zone-month","monthly":0.5000,"declared":true,"note":"first-25-zones tier"}
+```
 
 ## Atualizar preços
 
@@ -228,6 +289,21 @@ cada offer file e `sha256`. Regra que não casa nenhum SKU, ou que casa dois SKU
 diferentes, falha o refresh. O workflow `refresh-pricing.yml` faz isso toda segunda e abre PR
 quando algum preço muda.
 
+O snapshot é `schema_version` 2 desde o costgate 0.2.0: cada preço guarda também `rate_code`,
+`usage_type` bruto, `service_name` e `location` da offer file, e as faixas depois da primeira
+(`tiers`, para referência; a estimativa usa a primeira faixa). O snapshot vai embutido no binário,
+então cada release precifica com a própria cópia; `--pricing` lê um arquivo no lugar.
+
+| Binário | Snapshot embutido | Arquivo `--pricing` v1 | Arquivo `--pricing` v2 |
+|---|---|---|---|
+| 0.1.x | v1 | lê | recusa: `json: unknown field "rate_code"` (exit 3) |
+| 0.2.x | v2 | lê; `usage_type` e `rate_code` vazios | lê |
+
+O `Load` recusa campo desconhecido e `schema_version` fora da faixa que o build conhece, então
+binário antigo nunca lê pela metade um snapshot mais novo. Desde a 0.2.0 ele confere a versão antes
+dos campos, então um arquivo v3 futuro falha com `schema_version 3 not supported` em vez do nome de
+um campo.
+
 Para provar o caminho do PR sem tocar `main` nem o snapshot real, rode em modo de teste:
 
 ```sh
@@ -240,6 +316,12 @@ confere que o autor é `github-actions[bot]` e, no mesmo run, fecha o PR e apaga
 quando uma verificação falha). Mudança real de preço achada num dry run não vira PR; o próximo run
 semanal a pega.
 
+PR aberto com `GITHUB_TOKEN` recebe o run de `ci` em estado de aprovação pendente
+([doc do GitHub](https://docs.github.com/en/actions/concepts/security/github_token)): aprove pelo
+PR antes de fazer merge de um refresh real. No dry run esse run não resolve mais o ref depois que a
+branch é apagada e termina como falha sem jobs; o dry run registra o run no resumo do job e um job
+separado (o único com `actions: write`) o apaga.
+
 ## Limitações
 
 - **Uso variável é premissa**, não medição: GB processado, horas ligadas, eventos e
@@ -247,7 +329,9 @@ semanal a pega.
 - Preço de **lista on-demand**. Savings Plans, Reserved Instances, créditos, Free Tier, descontos
   negociados e impostos ficam fora. Spot é `on-demand × (1 − spot_discount)`, não o preço Spot
   do momento (que exige credencial e varia por AZ).
-- Só a **primeira faixa** de preço escalonado (hosted zone: 25 primeiras; S3: 50 TB; endpoint: 1 PB).
+- Só a **primeira faixa** de preço escalonado entra na conta (hosted zone: 25 primeiras; S3: 50 TB;
+  endpoint: 1 PB). O snapshot guarda as faixas seguintes, e a fatura pode cobrar uma delas porque a
+  AWS conta a faixa na organização inteira; compare `rate_code` com `pricing_rate_code`.
 - Não cobre transferência de dados entre AZs/regiões/internet, requisições (KMS, S3, Route 53
   queries), certificados emitidos pela Private CA, nem IOPS provisionado.
 - Só Linux em tenancy compartilhada; AMI Windows/RHEL/SUSE é precificada como Linux (o plan não diz
