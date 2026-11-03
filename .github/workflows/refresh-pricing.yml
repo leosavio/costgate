@@ -1,0 +1,58 @@
+name: refresh-pricing
+
+# Weekly: download the public Price List Bulk API files (no AWS credential),
+# rebuild pricing/us-east-1.json and open a PR when a price changed.
+# Requires "Allow GitHub Actions to create and approve pull requests" in the
+# repository settings. A PR opened with GITHUB_TOKEN does not trigger the ci
+# workflow; re-run it from the PR (close/reopen) before merging.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write # push the refresh branch
+      pull-requests: write # open the PR
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: refresh
+        run: go run ./cmd/costgate pricing refresh --region us-east-1 --out pricing/us-east-1.json
+
+      - name: test with the new snapshot
+        run: go test -count=1 ./...
+
+      - name: open PR when prices changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          if git diff --quiet -- pricing/; then echo "no change"; exit 0; fi
+          as_of="$(jq -r .as_of pricing/us-east-1.json)"
+          branch="pricing/refresh-${as_of%%T*}"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then echo "$branch exists"; exit 0; fi
+          gh auth setup-git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add pricing/us-east-1.json
+          git commit -m "chore(pricing): refresh us-east-1 snapshot as of ${as_of}"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "chore(pricing): refresh us-east-1 snapshot as of ${as_of}" \
+            --body "Automatic refresh from the public AWS Price List Bulk API. Review the price diff before merging."
