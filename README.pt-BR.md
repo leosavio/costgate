@@ -32,13 +32,48 @@ grep " costgate_${v}_${os}_${arch}.tar.gz\$" checksums.txt | shasum -a 256 -c -
 tar -xzf "costgate_${v}_${os}_${arch}.tar.gz" costgate
 ```
 
+No Linux, `sha256sum -c -` faz o mesmo que `shasum -a 256 -c -`.
+
 Homebrew (macOS e Linux), pelo tap [`leosavio/homebrew-tap`](https://github.com/leosavio/homebrew-tap):
 
 ```sh
 brew install leosavio/tap/costgate
 ```
 
+O Homebrew 7.0.11 em diante recusa fórmula de tap não oficial até ela ser confiada. Se o
+`brew install` parar com "Refusing to load formula ... from untrusted tap", rode
+`brew trust --formula leosavio/tap/costgate` e instale de novo.
+
 Com Go instalado: `go install github.com/leosavio/costgate/cmd/costgate@latest`.
+
+### Plataformas testadas
+
+| Plataforma | Runner do GitHub | `go test -race` + goldens (`ci.yml`) | Smoke de instalação (`install-smoke.yml`) |
+|---|---|---|---|
+| linux/amd64 | `ubuntu-24.04` | nativo | brew · go install · tarball |
+| linux/arm64 | `ubuntu-24.04-arm` | nativo | brew · go install · tarball |
+| darwin/arm64 | `macos-15` | nativo | brew · go install · tarball |
+| darwin/amd64 | `macos-15-intel` | nativo (CPU Intel, não Rosetta) | brew · go install · tarball |
+
+O [`install-smoke.yml`](.github/workflows/install-smoke.yml) instala uma release publicada como o
+usuário faria e roda após cada release, toda terça e sob demanda
+(`gh workflow run install-smoke.yml -f version=vX.Y.Z`). Em cada caminho confere que
+`costgate version` bate com a tag, que `costgate pricing verify` passa e que o caso
+`testdata/cases/baseline` sai com exit 1 e o Markdown do golden
+([`scripts/smoke-check.sh`](scripts/smoke-check.sh)).
+
+### Verificar a instalação
+
+O script compara com o testdata da tag instalada:
+
+```sh
+git clone -q --depth 1 --branch "v${v}" https://github.com/leosavio/costgate costgate-src && cd costgate-src
+curl -fsSLO https://raw.githubusercontent.com/leosavio/costgate/main/scripts/smoke-check.sh
+sh smoke-check.sh "$(command -v costgate)" "${v}"
+# ok version: costgate 0.1.1
+# ok us-east-1: 1415 prices, ...
+# ok baseline: exit 1, ### costgate: ❌ +US$ 414.16/month · over ceiling
+```
 
 ## Uso
 
@@ -192,6 +227,18 @@ O refresh lê `offers/v1.0/aws/index.json`, baixa o CSV de cada serviço mapeado
 cada offer file e `sha256`. Regra que não casa nenhum SKU, ou que casa dois SKUs com preços
 diferentes, falha o refresh. O workflow `refresh-pricing.yml` faz isso toda segunda e abre PR
 quando algum preço muda.
+
+Para provar o caminho do PR sem tocar `main` nem o snapshot real, rode em modo de teste:
+
+```sh
+gh workflow run refresh-pricing.yml -f dry_run_pr=true
+```
+
+O run faz o refresh e os testes normais, adiciona um campo sintético `test_marker` ao snapshot
+numa branch descartável `pricing/refresh-test-<run id>`, abre PR com label `pricing-refresh-test`,
+confere que o autor é `github-actions[bot]` e, no mesmo run, fecha o PR e apaga a branch (também
+quando uma verificação falha). Mudança real de preço achada num dry run não vira PR; o próximo run
+semanal a pega.
 
 ## Limitações
 

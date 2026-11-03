@@ -22,6 +22,10 @@ Homebrew (macOS and Linux), from the [`leosavio/homebrew-tap`](https://github.co
 brew install leosavio/tap/costgate
 ```
 
+Homebrew 7.0.11 and later refuse formulae from non-official taps until you trust them. If
+`brew install` stops with "Refusing to load formula ... from untrusted tap", run
+`brew trust --formula leosavio/tap/costgate` and install again.
+
 Go toolchain:
 
 ```sh
@@ -41,6 +45,37 @@ cosign verify-blob --bundle checksums.txt.sigstore.json \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
 grep " costgate_${v}_${os}_${arch}.tar.gz\$" checksums.txt | shasum -a 256 -c -
 tar -xzf "costgate_${v}_${os}_${arch}.tar.gz" costgate
+```
+
+On Linux, `sha256sum -c -` does the same as `shasum -a 256 -c -`.
+
+### Tested platforms
+
+| Platform | GitHub runner | `go test -race` + goldens (`ci.yml`) | Install smoke (`install-smoke.yml`) |
+|---|---|---|---|
+| linux/amd64 | `ubuntu-24.04` | native | brew · go install · tarball |
+| linux/arm64 | `ubuntu-24.04-arm` | native | brew · go install · tarball |
+| darwin/arm64 | `macos-15` | native | brew · go install · tarball |
+| darwin/amd64 | `macos-15-intel` | native (Intel CPU, not Rosetta) | brew · go install · tarball |
+
+[`install-smoke.yml`](.github/workflows/install-smoke.yml) installs a published release the way
+a user does and runs after every release, every Tuesday and on demand
+(`gh workflow run install-smoke.yml -f version=vX.Y.Z`). For each install path it checks that
+`costgate version` matches the tag, that `costgate pricing verify` passes, and that the
+`testdata/cases/baseline` case exits 1 with the golden Markdown
+([`scripts/smoke-check.sh`](scripts/smoke-check.sh)).
+
+### Verify your install
+
+The script compares against the testdata of the tag you installed:
+
+```sh
+git clone -q --depth 1 --branch "v${v}" https://github.com/leosavio/costgate costgate-src && cd costgate-src
+curl -fsSLO https://raw.githubusercontent.com/leosavio/costgate/main/scripts/smoke-check.sh
+sh smoke-check.sh "$(command -v costgate)" "${v}"
+# ok version: costgate 0.1.1
+# ok us-east-1: 1415 prices, ...
+# ok baseline: exit 1, ### costgate: ❌ +US$ 414.16/month · over ceiling
 ```
 
 ## Usage
@@ -196,6 +231,19 @@ EC2 one is ~300 MB and is streamed) and keeps only the SKUs of the rules in
 date of each offer file, and a `sha256`. A rule that matches no SKU, or two SKUs with different
 prices, fails the refresh. The `refresh-pricing.yml` workflow runs every Monday and opens a PR
 when a price changes.
+
+To prove the PR path without touching `main` or the real snapshot, run the workflow in dry-run
+mode:
+
+```sh
+gh workflow run refresh-pricing.yml -f dry_run_pr=true
+```
+
+It refreshes and tests as usual, then adds a synthetic `test_marker` field to the snapshot on a
+throwaway branch `pricing/refresh-test-<run id>`, opens a PR labelled `pricing-refresh-test`,
+checks that `github-actions[bot]` authored it, and closes the PR and deletes the branch in the
+same run, also when a check fails. A real price change found during a dry run is not proposed;
+the next weekly run picks it up.
 
 ## Limitations
 
