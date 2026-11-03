@@ -5,22 +5,40 @@ name: refresh-pricing
 # Requires "Allow GitHub Actions to create and approve pull requests" in the
 # repository settings. A PR opened with GITHUB_TOKEN does not trigger the ci
 # workflow; re-run it from the PR (close/reopen) before merging.
+#
+# dry_run_pr (manual only) proves the PR path without touching main or the
+# real snapshot: it adds a "test_marker" field to the snapshot on a throwaway
+# branch, opens a PR labelled pricing-refresh-test, checks that
+# github-actions[bot] authored it, then closes the PR and deletes the branch
+# in the same run (also on failure).
 
 on:
   schedule:
     - cron: "17 6 * * 1"
   workflow_dispatch:
+    inputs:
+      dry_run_pr:
+        description: "Open and close a marked test PR instead of a real refresh PR"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+
+concurrency:
+  group: refresh-pricing
+  cancel-in-progress: false
 
 jobs:
   refresh:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
-      contents: write # push the refresh branch
-      pull-requests: write # open the PR
+      contents: write # push the refresh branch (and delete the test branch)
+      pull-requests: write # open the PR (and close the test PR)
+    env:
+      DRY_RUN: ${{ inputs.dry_run_pr && 'true' || 'false' }}
+      TEST_LABEL: pricing-refresh-test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,22 +55,88 @@ jobs:
       - name: test with the new snapshot
         run: go test -count=1 ./...
 
+      # Synthetic, marked change. Applied after the tests, only on the test
+      # branch; the PR is never merged.
+      - name: mark snapshot (dry run)
+        if: env.DRY_RUN == 'true'
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -eu
+          f=pricing/us-east-1.json
+          jq --arg m "refresh-pricing dry run ${RUN_ID}; do not merge" '{test_marker: $m} + .' "$f" > "$f.tmp"
+          mv "$f.tmp" "$f"
+          git diff --stat -- pricing/
+
       - name: open PR when prices changed
+        id: pr
         env:
           GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -eu
           if git diff --quiet -- pricing/; then echo "no change"; exit 0; fi
           as_of="$(jq -r .as_of pricing/us-east-1.json)"
-          branch="pricing/refresh-${as_of%%T*}"
+          if [ "$DRY_RUN" = true ]; then
+            branch="pricing/refresh-test-${RUN_ID}"
+            title="test(pricing): dry run of the refresh PR (run ${RUN_ID}), do not merge"
+            body="Opened by refresh-pricing.yml with dry_run_pr=true to prove the PR path. The snapshot carries a synthetic test_marker field. The same run closes this PR and deletes the branch."
+            label_args="--label ${TEST_LABEL}"
+          else
+            branch="pricing/refresh-${as_of%%T*}"
+            title="chore(pricing): refresh us-east-1 snapshot as of ${as_of}"
+            body="Automatic refresh from the public AWS Price List Bulk API. Review the price diff before merging."
+            label_args=""
+          fi
           if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then echo "$branch exists"; exit 0; fi
           gh auth setup-git
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"
           git add pricing/us-east-1.json
-          git commit -m "chore(pricing): refresh us-east-1 snapshot as of ${as_of}"
+          git commit -m "$title"
           git push origin "$branch"
-          gh pr create --base main --head "$branch" \
-            --title "chore(pricing): refresh us-east-1 snapshot as of ${as_of}" \
-            --body "Automatic refresh from the public AWS Price List Bulk API. Review the price diff before merging."
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          # shellcheck disable=SC2086 # label_args is empty or two words
+          url="$(gh pr create --base main --head "$branch" --title "$title" --body "$body" $label_args)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "opened $url"
+
+      - name: verify test PR (dry run)
+        if: env.DRY_RUN == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ steps.pr.outputs.url }}
+        run: |
+          set -eu
+          [ -n "$URL" ] || { echo "no PR was opened"; exit 1; }
+          n="${URL##*/}"
+          pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${n}")"
+          author="$(echo "$pr" | jq -r .user.login)"
+          labels="$(echo "$pr" | jq -r '[.labels[].name] | join(",")')"
+          base="$(echo "$pr" | jq -r .base.ref)"
+          echo "PR #$n author=$author labels=$labels base=$base"
+          [ "$author" = "github-actions[bot]" ] || { echo "author is $author"; exit 1; }
+          [ "$labels" = "$TEST_LABEL" ] || { echo "labels are $labels"; exit 1; }
+          [ "$base" = main ] || { echo "base is $base"; exit 1; }
+          gh pr diff "$n" --repo "$GITHUB_REPOSITORY" | grep -q '^+  "test_marker": ' || { echo "marker not in PR diff"; exit 1; }
+          echo "### dry run PR: $URL (author $author, label $labels)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: close test PR and delete branch (dry run)
+        if: always() && env.DRY_RUN == 'true' && steps.pr.outputs.branch != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ steps.pr.outputs.url }}
+          BRANCH: ${{ steps.pr.outputs.branch }}
+        run: |
+          set -eu
+          if [ -n "$URL" ]; then
+            gh pr close "$URL" --comment "Dry run finished; closing." || true
+          fi
+          git push origin --delete "$BRANCH"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then echo "branch $BRANCH still exists"; exit 1; fi
+          if [ -n "$URL" ]; then
+            state="$(gh pr view "$URL" --json state --jq .state)"
+            [ "$state" = CLOSED ] || { echo "PR state $state"; exit 1; }
+          fi
+          echo "closed $URL, deleted $BRANCH"
