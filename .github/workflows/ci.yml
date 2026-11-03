@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -33,16 +33,54 @@ jobs:
           go install honnef.co/go/tools/cmd/staticcheck@v0.8.2 # 2026.2.2
           "$(go env GOPATH)/bin/staticcheck" ./...
 
-      # Golden files are generated on darwin/arm64; this amd64 run proves the
-      # output is byte-identical across architectures.
-      - name: go test -race
-        run: go test -race -count=1 ./...
-
-      - name: embedded snapshot verifies
-        run: go run ./cmd/costgate pricing verify
-
       - name: cross-compile
         run: |
           for target in darwin/arm64 darwin/amd64 linux/arm64 linux/amd64; do
             CGO_ENABLED=0 GOOS="${target%/*}" GOARCH="${target#*/}" go build -trimpath -o /dev/null ./cmd/costgate
           done
+
+  # Native test on the four release targets. Golden files are generated on
+  # darwin/arm64; TestGoldenCases compares them byte for byte, so a pass here
+  # proves the output is identical on every OS and architecture.
+  # Runner labels: https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+  test:
+    name: test (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, target: linux/amd64 }
+          - { runner: ubuntu-24.04-arm, target: linux/arm64 }
+          - { runner: macos-15, target: darwin/arm64 }
+          - { runner: macos-15-intel, target: darwin/amd64 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: native target
+        env:
+          WANT: ${{ matrix.target }}
+        run: |
+          got="$(go env GOOS)/$(go env GOARCH)"
+          echo "go env: $got, uname -m: $(uname -m)"
+          [ "$got" = "$WANT" ] || { echo "runner is $got, want $WANT"; exit 1; }
+          # On macOS, 1 means the process runs under Rosetta (emulated amd64).
+          if [ "$(uname -s)" = Darwin ]; then
+            sysctl -n machdep.cpu.brand_string
+            translated="$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)"
+            [ "$translated" = 0 ] || { echo "running under Rosetta"; exit 1; }
+          fi
+
+      - name: go test -race
+        run: go test -race -count=1 ./...
+
+      - name: embedded snapshot verifies
+        run: go run ./cmd/costgate pricing verify
