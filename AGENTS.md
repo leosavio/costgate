@@ -32,11 +32,17 @@ Bulk API e devolve Markdown/JSON + exit code para gate de PR. Primeiro consumido
 | `internal/estimate` | fórmulas por tipo + lista de custo zero | `resources.go`; valores em `math/big.Rat` |
 | `internal/report` | gate (exit 0/1/2/3), Markdown com marcador, JSON `schema_version` 1 | |
 | `pricing/us-east-1.json` | snapshot embutido (`go:embed`) | 1415 preços, as of 2026-11-03 |
-| CI | GitHub Actions: `ci.yml`, `release.yml` (cosign keyless), `refresh-pricing.yml` (semanal) | actions por SHA |
+| CI | GitHub Actions: `ci.yml` (lint + matriz nativa de teste linux/darwin × amd64/arm64), `release.yml` (cosign keyless), `install-smoke.yml` (brew, go install e tarball nas 4 plataformas), `refresh-pricing.yml` (semanal; `dry_run_pr` prova o PR) | actions por SHA |
 
 ## Estado atual (onde parei)
 
-> Última atualização: 2026-11-03 (2ª sessão)
+> Última atualização: 2026-11-03 (3ª sessão)
+
+3ª sessão (issue leosavio-org#23): `ci.yml` testa nativo em `ubuntu-24.04`, `ubuntu-24.04-arm`,
+`macos-15` e `macos-15-intel` (goldens byte a byte em todas); `install-smoke.yml` passou nas 12
+células (4 plataformas × brew/go install/tarball) para v0.1.1; `refresh-pricing.yml -f dry_run_pr=true`
+abriu e fechou o PR #1 (autor `github-actions[bot]`, label `pricing-refresh-test`). Homebrew ≥ 7.0.11
+exige `brew trust --formula leosavio/tap/costgate` (documentado no README). Sem release nova (só CI e docs).
 
 v0.1.0 publicada na 1ª sessão (MVP com 14 famílias de recurso do baseline T0–T3, goldens
 idênticos em arm64/amd64). 2ª sessão: README oficial em inglês com `README.pt-BR.md`
