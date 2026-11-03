@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "comment": "Spot discount for every instance; the batch instance runs 8 h a day",
+  "defaults": {"spot_discount": 0.6},
+  "resources": {
+    "aws_instance.batch": {"hours_per_month": 240}
+  }
+}

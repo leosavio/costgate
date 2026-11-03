@@ -1,0 +1,8 @@
+{
+ "regions": {
+  "us-east-1": {
+   "regionCode": "us-east-1",
+   "currentVersionUrl": "/offers/v1.0/aws/AmazonRoute53/20260911124504/us-east-1/index.json"
+  }
+ }
+}

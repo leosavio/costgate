@@ -1,0 +1,41 @@
+{
+ "formatVersion": "v1.0",
+ "publicationDate": "2026-11-03T01:53:43Z",
+ "offers": {
+  "AmazonEC2": {
+   "offerCode": "AmazonEC2",
+   "currentVersionUrl": "/offers/v1.0/aws/AmazonEC2/current/index.json",
+   "currentRegionIndexUrl": "/offers/v1.0/aws/AmazonEC2/current/region_index.json"
+  },
+  "AmazonVPC": {
+   "offerCode": "AmazonVPC",
+   "currentVersionUrl": "/offers/v1.0/aws/AmazonVPC/current/index.json",
+   "currentRegionIndexUrl": "/offers/v1.0/aws/AmazonVPC/current/region_index.json"
+  },
+  "AmazonRoute53": {
+   "offerCode": "AmazonRoute53",
+   "currentVersionUrl": "/offers/v1.0/aws/AmazonRoute53/current/index.json",
+   "currentRegionIndexUrl": "/offers/v1.0/aws/AmazonRoute53/current/region_index.json"
+  },
+  "awskms": {
+   "offerCode": "awskms",
+   "currentVersionUrl": "/offers/v1.0/aws/awskms/current/index.json",
+   "currentRegionIndexUrl": "/offers/v1.0/aws/awskms/current/region_index.json"
+  },
+  "AmazonS3": {
+   "offerCode": "AmazonS3",
+   "currentVersionUrl": "/offers/v1.0/aws/AmazonS3/current/index.json",
+   "currentRegionIndexUrl": "/offers/v1.0/aws/AmazonS3/current/region_index.json"
+  },
+  "AWSCloudTrail": {
+   "offerCode": "AWSCloudTrail",
+   "currentVersionUrl": "/offers/v1.0/aws/AWSCloudTrail/current/index.json",
+   "currentRegionIndexUrl": "/offers/v1.0/aws/AWSCloudTrail/current/region_index.json"
+  },
+  "AWSCertificateManager": {
+   "offerCode": "AWSCertificateManager",
+   "currentVersionUrl": "/offers/v1.0/aws/AWSCertificateManager/current/index.json",
+   "currentRegionIndexUrl": "/offers/v1.0/aws/AWSCertificateManager/current/region_index.json"
+  }
+ }
+}

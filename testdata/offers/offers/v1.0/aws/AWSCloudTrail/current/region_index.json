@@ -1,0 +1,8 @@
+{
+ "regions": {
+  "us-east-1": {
+   "regionCode": "us-east-1",
+   "currentVersionUrl": "/offers/v1.0/aws/AWSCloudTrail/20261102172009/us-east-1/index.json"
+  }
+ }
+}

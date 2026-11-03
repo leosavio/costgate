@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "comment": "Premises for the example baseline plan",
+  "defaults": {"az_count": 2},
+  "types": {
+    "aws_nat_gateway": {"gb_per_month": 50}
+  },
+  "resources": {
+    "aws_instance.worker": {"hours_per_month": 200, "spot_discount": 0.7},
+    "aws_s3_bucket.trail": {"gb_per_month": 1},
+    "aws_cloudtrail.org": {"events_per_month": 0},
+    "aws_ec2_transit_gateway_vpc_attachment.main": {"gb_per_month": 100}
+  }
+}

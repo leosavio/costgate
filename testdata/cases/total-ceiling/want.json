@@ -1,0 +1,406 @@
+{
+  "schema_version": 1,
+  "tool": "costgate",
+  "version": "test",
+  "region": "us-east-1",
+  "currency": "USD",
+  "pricing": {
+    "as_of": "2026-11-03T00:09:47Z",
+    "sha256": "383a4cb3421fe8c6ecfb1a3ea20d069d653eba464f9167ae741aba8138526677",
+    "sources": [
+      {
+        "service": "AWSCertificateManager",
+        "scope": "region",
+        "version": "20261022154217",
+        "publication_date": "2026-10-22T15:42:17Z",
+        "path": "/offers/v1.0/aws/AWSCertificateManager/20261022154217/us-east-1/index.csv"
+      },
+      {
+        "service": "AWSCloudTrail",
+        "scope": "region",
+        "version": "20261102172009",
+        "publication_date": "2026-11-02T17:20:09Z",
+        "path": "/offers/v1.0/aws/AWSCloudTrail/20261102172009/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonEC2",
+        "scope": "region",
+        "version": "20261029175634",
+        "publication_date": "2026-10-29T17:56:34Z",
+        "path": "/offers/v1.0/aws/AmazonEC2/20261029175634/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonRoute53",
+        "scope": "global",
+        "version": "20260911124504",
+        "publication_date": "2026-09-11T12:45:04Z",
+        "path": "/offers/v1.0/aws/AmazonRoute53/current/index.csv"
+      },
+      {
+        "service": "AmazonRoute53",
+        "scope": "region",
+        "version": "20260911124504",
+        "publication_date": "2026-09-11T12:45:04Z",
+        "path": "/offers/v1.0/aws/AmazonRoute53/20260911124504/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonS3",
+        "scope": "region",
+        "version": "20261015173540",
+        "publication_date": "2026-10-15T17:35:40Z",
+        "path": "/offers/v1.0/aws/AmazonS3/20261015173540/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonVPC",
+        "scope": "region",
+        "version": "20261103000947",
+        "publication_date": "2026-11-03T00:09:47Z",
+        "path": "/offers/v1.0/aws/AmazonVPC/20261103000947/us-east-1/index.csv"
+      },
+      {
+        "service": "awskms",
+        "scope": "region",
+        "version": "20261026201814",
+        "publication_date": "2026-10-26T20:18:14Z",
+        "path": "/offers/v1.0/aws/awskms/20261026201814/us-east-1/index.csv"
+      }
+    ]
+  },
+  "totals": {
+    "monthly_before": 73.5160,
+    "monthly_after": 21.8176,
+    "monthly_delta": -51.6984
+  },
+  "ceilings": {
+    "max_monthly_delta": null,
+    "max_monthly_total": 5.0000
+  },
+  "status": "over_ceiling",
+  "exit_code": 1,
+  "reasons": [
+    "monthly total after the change above --max-monthly-total"
+  ],
+  "incomplete": false,
+  "resources": [
+    {
+      "address": "aws_ebs_volume.data",
+      "type": "aws_ebs_volume",
+      "action": "update",
+      "zero_cost": false,
+      "before": {
+        "monthly": 1.6000,
+        "lines": [
+          {
+            "name": "EBS volume (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp3|",
+            "unit_price": 0.08,
+            "quantity": 20,
+            "unit": "GB-month",
+            "monthly": 1.6000,
+            "declared": true
+          }
+        ]
+      },
+      "after": {
+        "monthly": 4.0000,
+        "lines": [
+          {
+            "name": "EBS volume (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp3|",
+            "unit_price": 0.08,
+            "quantity": 50,
+            "unit": "GB-month",
+            "monthly": 4.0000,
+            "declared": true
+          }
+        ]
+      },
+      "delta": 2.4000,
+      "blocking": false
+    },
+    {
+      "address": "aws_eip.nat",
+      "type": "aws_eip",
+      "action": "delete",
+      "zero_cost": false,
+      "before": {
+        "monthly": 3.6500,
+        "lines": [
+          {
+            "name": "public IPv4 address",
+            "price_key": "AmazonVPC|PublicIPv4:InUseAddress|",
+            "unit_price": 0.005,
+            "quantity": 730,
+            "unit": "h",
+            "monthly": 3.6500,
+            "declared": true
+          }
+        ]
+      },
+      "after": null,
+      "delta": -3.6500,
+      "blocking": false
+    },
+    {
+      "address": "aws_instance.app",
+      "type": "aws_instance",
+      "action": "replace",
+      "zero_cost": false,
+      "before": {
+        "monthly": 8.2320,
+        "lines": [
+          {
+            "name": "compute on-demand, Linux t3.micro",
+            "price_key": "AmazonEC2|BoxUsage:t3.micro|RunInstances",
+            "unit_price": 0.0104,
+            "quantity": 730,
+            "unit": "h",
+            "monthly": 7.5920,
+            "declared": true
+          },
+          {
+            "name": "root volume (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp3|",
+            "unit_price": 0.08,
+            "quantity": 8,
+            "unit": "GB-month",
+            "monthly": 0.6400,
+            "declared": true
+          }
+        ]
+      },
+      "after": {
+        "monthly": 6.1856,
+        "lines": [
+          {
+            "name": "compute Spot, Linux t4g.small",
+            "price_key": "AmazonEC2|BoxUsage:t4g.small|RunInstances",
+            "unit_price": 0.0168,
+            "quantity": 730,
+            "unit": "h",
+            "factor": 0.4,
+            "monthly": 4.9056,
+            "premise": "spot_discount",
+            "declared": true,
+            "note": "on-demand × (1 − spot_discount 0.6)"
+          },
+          {
+            "name": "root volume (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp3|",
+            "unit_price": 0.08,
+            "quantity": 16,
+            "unit": "GB-month",
+            "monthly": 1.2800,
+            "declared": true
+          }
+        ]
+      },
+      "delta": -2.0464,
+      "blocking": false
+    },
+    {
+      "address": "aws_instance.batch",
+      "type": "aws_instance",
+      "action": "update",
+      "zero_cost": false,
+      "before": {
+        "monthly": 25.6840,
+        "lines": [
+          {
+            "name": "compute on-demand, Linux m7g.large",
+            "price_key": "AmazonEC2|BoxUsage:m7g.large|RunInstances",
+            "unit_price": 0.0816,
+            "quantity": 240,
+            "unit": "h",
+            "monthly": 19.5840,
+            "declared": true
+          },
+          {
+            "name": "root volume (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp3|",
+            "unit_price": 0.08,
+            "quantity": 20,
+            "unit": "GB-month",
+            "monthly": 1.6000,
+            "declared": true
+          },
+          {
+            "name": "ebs_block_device[0] (st1)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.st1|",
+            "unit_price": 0.045,
+            "quantity": 100,
+            "unit": "GB-month",
+            "monthly": 4.5000,
+            "declared": true
+          }
+        ]
+      },
+      "after": {
+        "monthly": 10.1320,
+        "lines": [
+          {
+            "name": "compute on-demand, Linux t4g.small",
+            "price_key": "AmazonEC2|BoxUsage:t4g.small|RunInstances",
+            "unit_price": 0.0168,
+            "quantity": 240,
+            "unit": "h",
+            "monthly": 4.0320,
+            "declared": true
+          },
+          {
+            "name": "root volume (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp3|",
+            "unit_price": 0.08,
+            "quantity": 20,
+            "unit": "GB-month",
+            "monthly": 1.6000,
+            "declared": true
+          },
+          {
+            "name": "ebs_block_device[0] (st1)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.st1|",
+            "unit_price": 0.045,
+            "quantity": 100,
+            "unit": "GB-month",
+            "monthly": 4.5000,
+            "declared": true
+          }
+        ]
+      },
+      "delta": -15.5520,
+      "blocking": false
+    },
+    {
+      "address": "aws_kms_key.state",
+      "type": "aws_kms_key",
+      "action": "no-op",
+      "zero_cost": false,
+      "before": {
+        "monthly": 1.0000,
+        "lines": [
+          {
+            "name": "customer managed key",
+            "price_key": "awskms|KMS-Keys|",
+            "unit_price": 1,
+            "quantity": 1,
+            "unit": "key-month",
+            "monthly": 1.0000,
+            "declared": true,
+            "note": "requests not priced"
+          }
+        ]
+      },
+      "after": {
+        "monthly": 1.0000,
+        "lines": [
+          {
+            "name": "customer managed key",
+            "price_key": "awskms|KMS-Keys|",
+            "unit_price": 1,
+            "quantity": 1,
+            "unit": "key-month",
+            "monthly": 1.0000,
+            "declared": true,
+            "note": "requests not priced"
+          }
+        ]
+      },
+      "delta": 0.0000,
+      "blocking": false
+    },
+    {
+      "address": "aws_nat_gateway.main",
+      "type": "aws_nat_gateway",
+      "action": "delete",
+      "zero_cost": false,
+      "before": {
+        "monthly": 32.8500,
+        "lines": [
+          {
+            "name": "NAT gateway hours",
+            "price_key": "AmazonEC2|NatGateway-Hours|NatGateway",
+            "unit_price": 0.045,
+            "quantity": 730,
+            "unit": "h",
+            "monthly": 32.8500,
+            "declared": true
+          },
+          {
+            "name": "NAT data processed",
+            "price_key": "AmazonEC2|NatGateway-Bytes|NatGateway",
+            "unit_price": 0.045,
+            "quantity": 0,
+            "unit": "GB",
+            "monthly": 0.0000,
+            "premise": "gb_per_month",
+            "declared": false
+          }
+        ]
+      },
+      "after": null,
+      "delta": -32.8500,
+      "blocking": false
+    },
+    {
+      "address": "aws_route_table.private",
+      "type": "aws_route_table",
+      "action": "update",
+      "zero_cost": true,
+      "before": {
+        "monthly": 0.0000,
+        "lines": []
+      },
+      "after": {
+        "monthly": 0.0000,
+        "lines": []
+      },
+      "delta": 0.0000,
+      "blocking": false
+    },
+    {
+      "address": "module.dns.aws_route53_zone.this[\"example.com\"]",
+      "type": "aws_route53_zone",
+      "action": "no-op",
+      "zero_cost": false,
+      "before": {
+        "monthly": 0.5000,
+        "lines": [
+          {
+            "name": "hosted zone",
+            "price_key": "AmazonRoute53|HostedZone|",
+            "unit_price": 0.5,
+            "quantity": 1,
+            "unit": "zone-month",
+            "monthly": 0.5000,
+            "declared": true,
+            "note": "first-25-zones tier"
+          }
+        ]
+      },
+      "after": {
+        "monthly": 0.5000,
+        "lines": [
+          {
+            "name": "hosted zone",
+            "price_key": "AmazonRoute53|HostedZone|",
+            "unit_price": 0.5,
+            "quantity": 1,
+            "unit": "zone-month",
+            "monthly": 0.5000,
+            "declared": true,
+            "note": "first-25-zones tier"
+          }
+        ]
+      },
+      "delta": 0.0000,
+      "blocking": false
+    }
+  ],
+  "usage_not_declared": [
+    {
+      "address": "aws_nat_gateway.main",
+      "line": "NAT data processed",
+      "premise": "gb_per_month"
+    }
+  ]
+}

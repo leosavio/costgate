@@ -1,0 +1,111 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.11.0",
+  "planned_values": {"root_module": {}},
+  "resource_changes": [
+    {
+      "address": "aws_networkfirewall_firewall.inspection",
+      "mode": "managed",
+      "type": "aws_networkfirewall_firewall",
+      "name": "inspection",
+      "provider_name": "registry.opentofu.org/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"name": "inspection", "region": "us-east-1"},
+        "after_unknown": {"id": true}
+      }
+    },
+    {
+      "address": "aws_lb.legacy",
+      "mode": "managed",
+      "type": "aws_lb",
+      "name": "legacy",
+      "provider_name": "registry.opentofu.org/hashicorp/aws",
+      "change": {
+        "actions": ["no-op"],
+        "before": {"name": "legacy", "region": "us-east-1"},
+        "after": {"name": "legacy", "region": "us-east-1"},
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "aws_db_instance.old",
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "old",
+      "provider_name": "registry.opentofu.org/hashicorp/aws",
+      "change": {
+        "actions": ["delete"],
+        "before": {"instance_class": "db.t4g.micro", "region": "us-east-1"},
+        "after": null,
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "aws_instance.from_var",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "from_var",
+      "provider_name": "registry.opentofu.org/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"ami": "ami-0123456789abcdef0", "region": "us-east-1"},
+        "after_unknown": {"instance_type": true, "root_block_device": true}
+      }
+    },
+    {
+      "address": "aws_vpc_endpoint.gwlb",
+      "mode": "managed",
+      "type": "aws_vpc_endpoint",
+      "name": "gwlb",
+      "provider_name": "registry.opentofu.org/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"vpc_endpoint_type": "GatewayLoadBalancer", "region": "us-east-1"},
+        "after_unknown": {"subnet_ids": true}
+      }
+    },
+    {
+      "address": "aws_nat_gateway.west",
+      "mode": "managed",
+      "type": "aws_nat_gateway",
+      "name": "west",
+      "provider_name": "registry.opentofu.org/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"connectivity_type": "public", "region": "us-west-2"},
+        "after_unknown": {"id": true}
+      }
+    },
+    {
+      "address": "aws_s3_bucket.logs",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "logs",
+      "provider_name": "registry.opentofu.org/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"bucket": "example-logs", "region": "us-east-1"},
+        "after_unknown": {"id": true}
+      }
+    },
+    {
+      "address": "aws_kms_key.app",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "app",
+      "provider_name": "registry.opentofu.org/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"description": "app", "region": "us-east-1"},
+        "after_unknown": {"id": true}
+      }
+    }
+  ]
+}
