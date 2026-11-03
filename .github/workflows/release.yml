@@ -69,3 +69,32 @@ jobs:
           sha256sum -c --ignore-missing checksums.txt
           ```
           EOF
+
+      # Pushes Formula/costgate.rb to leosavio/homebrew-tap with a deploy key
+      # that can write only to that repository.
+      - name: update Homebrew tap
+        env:
+          TAP_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          version="${TAG#v}"
+          case "$version" in *-*) echo "pre-release $version: tap not updated"; exit 0 ;; esac
+          if [ -z "$TAP_KEY" ]; then
+            echo "::warning::HOMEBREW_TAP_DEPLOY_KEY not set; run scripts/homebrew-formula.sh and update the tap by hand"
+            exit 0
+          fi
+          umask 077
+          key="$RUNNER_TEMP/tap_key"
+          printf '%s\n' "$TAP_KEY" > "$key"
+          curl -fsS https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' > "$RUNNER_TEMP/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts -o StrictHostKeyChecking=yes"
+          git clone -q git@github.com:leosavio/homebrew-tap.git "$RUNNER_TEMP/tap"
+          sh scripts/homebrew-formula.sh "$version" dist/checksums.txt > "$RUNNER_TEMP/tap/Formula/costgate.rb"
+          cd "$RUNNER_TEMP/tap"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then echo "formula unchanged"; rm -f "$key"; exit 0; fi
+          git commit -qam "feat: costgate ${version}"
+          git push -q origin main
+          rm -f "$key"
