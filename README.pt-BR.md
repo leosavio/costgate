@@ -1,5 +1,9 @@
 # costgate
 
+🇺🇸 [English](README.md) (versão oficial) · 🇧🇷 Português
+
+> Tradução do `README.md`. Em caso de divergência, vale a versão em inglês.
+
 Projeção do custo mensal da AWS de um `terraform plan` (ou `tofu plan`), **antes × depois** por
 recurso, com gate de PR: sai com código distinto quando o delta passa do teto ou quando aparece
 recurso sem preço conhecido. Binário único em Go, offline, sem credencial AWS e sem SaaS.
@@ -16,7 +20,7 @@ Decisões: [ADR-001 (Go, snapshot da Bulk API e fail-closed)](docs/adr/001-go-sn
 Release (darwin/linux, arm64/amd64), com verificação de checksum e assinatura keyless:
 
 ```sh
-v=0.1.0; os=darwin; arch=arm64
+v=0.1.1; os=darwin; arch=arm64
 base="https://github.com/leosavio/costgate/releases/download/v${v}"
 curl -fsSLO "${base}/costgate_${v}_${os}_${arch}.tar.gz"
 curl -fsSLO "${base}/checksums.txt"
@@ -28,7 +32,13 @@ grep " costgate_${v}_${os}_${arch}.tar.gz\$" checksums.txt | shasum -a 256 -c -
 tar -xzf "costgate_${v}_${os}_${arch}.tar.gz" costgate
 ```
 
-Ou, com Go instalado: `go install github.com/leosavio/costgate/cmd/costgate@latest`.
+Homebrew (macOS e Linux), pelo tap [`leosavio/homebrew-tap`](https://github.com/leosavio/homebrew-tap):
+
+```sh
+brew install leosavio/tap/costgate
+```
+
+Com Go instalado: `go install github.com/leosavio/costgate/cmd/costgate@latest`.
 
 ## Uso
 
@@ -209,4 +219,4 @@ go vet ./... && staticcheck ./... && go test -race ./...
 go test ./internal/cli -update      # regrava golden files de testdata/ (revise o diff)
 ```
 
-Guia curto: [CONTRIBUTING.md](CONTRIBUTING.md). Licença: [MIT](LICENSE).
+Guia curto: [CONTRIBUTING.md](CONTRIBUTING.md) (em inglês). Licença: [MIT](LICENSE).

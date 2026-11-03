@@ -5,6 +5,10 @@
 Aceito (2026-11-03). Decisões D1–D3 tomadas pelo operador em 2026-11-02/03; D4–D6 são
 detalhes de implementação decididos pelo agente dentro desse escopo.
 
+> Nota 2026-11-03: o operador confirmou D4 (exit 2 tem precedência sobre 1: estimativa incompleta
+> não prova que o teto foi respeitado) e D5 (não precificado em `no-op`/`delete` não bloqueia,
+> senão toda stack com recurso legado fora do mapa exigiria `cost-approved`).
+
 ## Contexto
 
 - O produto `foundation-org-leo-plan` precisa barrar, no PR, mudança de Terraform que aumente o

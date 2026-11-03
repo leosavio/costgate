@@ -36,22 +36,23 @@ Bulk API e devolve Markdown/JSON + exit code para gate de PR. Primeiro consumido
 
 ## Estado atual (onde parei)
 
-> Última atualização: 2026-11-03
+> Última atualização: 2026-11-03 (2ª sessão)
 
-MVP criado na sessão de 2026-11-03 (kiro-cli): 14 famílias de recurso do baseline T0–T3 do
-foundation, Spot com desconto, Graviton, `create/update/delete/replace/no-op/forget`, golden
-tests em `testdata/cases/` (baseline vindo de um plan real do Terraform 1.14.5 + provider AWS
-6.58.0, gerado offline com credencial falsa) e fixture da Bulk API em `testdata/offers/`.
-Goldens idênticos em arm64 e amd64. Release v0.1.0. Integração com o foundation **só
-documentada** (`docs/integration/github-actions.md`), não aplicada.
+v0.1.0 publicada na 1ª sessão (MVP com 14 famílias de recurso do baseline T0–T3, goldens
+idênticos em arm64/amd64). 2ª sessão: README oficial em inglês com `README.pt-BR.md`
+(regra do portfólio invalidada para docs públicas, evolution-log do `leosavio-org`), versão
+correta via `go install` (`debug.ReadBuildInfo`), tap `leosavio/homebrew-tap` com fórmula gerada
+por `scripts/homebrew-formula.sh` e publicada pelo `release.yml` via deploy key
+(`HOMEBREW_TAP_DEPLOY_KEY`, escrita só no tap). Actions pode abrir PR (refresh de preço).
+Operador confirmou D4/D5 da ADR-001. Integração com o foundation **só documentada**.
 
 ## Próximos passos
 
-- [ ] Operador: habilitar "Allow GitHub Actions to create and approve pull requests" para o `refresh-pricing.yml`
 - [ ] Foundation: errata na ADR-011 §2 (Infracost → costgate) e job de custo a partir de `docs/integration/github-actions.md`
 - [ ] Resolver `subnet_ids` desconhecido pela seção `configuration` do plan (hoje usa `az_count`)
 - [ ] ASG + launch template (`desired_capacity` × tipo)
 - [ ] Mapear T3-03 Network Firewall, T3-06 Route 53 Profiles, T3-08 IPAM Advanced e VPC Encryption Controls quando um módulo os usar
+- [ ] homebrew-core quando o repo tiver ≥ 30 dias e 75 stars, 30 forks ou 30 watchers (fórmula compilando do fonte)
 
 ## Comandos essenciais
 
@@ -62,7 +63,8 @@ GOARCH=amd64 go test ./...                           # determinismo cross-arch (
 go run ./cmd/costgate pricing refresh                # baixa a Bulk API pública (~12 s), grava pricing/us-east-1.json
 go run ./cmd/costgate pricing verify
 go run ./cmd/costgate diff --plan testdata/cases/baseline/plan.json --usage testdata/cases/baseline/usage.json --max-monthly-delta 50
-git tag vX.Y.Z && git push origin vX.Y.Z             # release.yml: binários + checksums.txt + .sigstore.json
+git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z   # release.yml: binários, checksums, assinatura, fórmula no tap
+sh scripts/homebrew-formula.sh X.Y.Z checksums.txt    # fórmula manual (fallback sem deploy key)
 ```
 
 ## Fontes de verdade locais

@@ -1,31 +1,30 @@
-# Integração: gate de custo no PR (GitHub Actions)
+# Integration: PR cost gate (GitHub Actions)
 
-> Job de exemplo para o `leosavio/foundation-org-leo-plan`. **Não aplicado** no foundation ainda.
-> Segue `foundation/docs/tooling/supply-chain.md`: actions por SHA com o tag em comentário,
-> `permissions:` mínimas por job, `persist-credentials: false`, binário verificado por checksum e
-> assinatura, sem `trivy-action`/`setup-trivy`. SHAs conferidos em 2026-11-03 e iguais aos de
-> `foundation/docs/tooling/versions.md`.
+> Example job for a Terraform repository (first consumer: `leosavio/foundation-org-leo-plan`,
+> not applied there yet). It follows supply-chain rules: actions pinned to a commit SHA with the
+> tag in a comment, minimal `permissions:` per job, `persist-credentials: false`, the binary
+> verified by checksum and signature, no `trivy-action`/`setup-trivy`. SHAs checked on 2026-11-03.
 
-## Fluxo
+## Flow
 
 ```text
-terraform plan -out=tfplan → terraform show -json tfplan > plan.json   (job plan, OIDC de leitura)
+terraform plan -out=tfplan → terraform show -json tfplan > plan.json   (plan job, read-only OIDC)
           └─ artifact plan.json
 costgate diff --plan plan.json --usage costgate-usage.json \
-              --max-monthly-delta "$COST_DELTA_CEILING_USD" --markdown-out cost.md   (job cost)
-          ├─ comentário único no PR (marcador <!-- costgate -->), atualizado a cada push
-          └─ exit 0 passa · 1 ou 2 falha, salvo label cost-approved · 3 falha sempre
+              --max-monthly-delta "$COST_DELTA_CEILING_USD" --markdown-out cost.md   (cost job)
+          ├─ one PR comment (marker <!-- costgate -->), updated on every push
+          └─ exit 0 passes · 1 or 2 fails unless the PR has the cost-approved label · 3 always fails
 ```
 
-| Exit | Significado | Sem `cost-approved` | Com `cost-approved` |
+| Exit | Meaning | Without `cost-approved` | With `cost-approved` |
 |---|---|---|---|
-| 0 | dentro do teto, tudo precificado | passa | passa |
-| 1 | delta (ou total) acima do teto | **falha** | passa |
-| 2 | recurso criado/alterado sem preço conhecido | **falha** | passa |
-| 3 | erro de uso ou de entrada (plan inválido, premissa inválida) | **falha** | **falha** |
+| 0 | within the ceiling, everything priced | pass | pass |
+| 1 | delta (or total) above the ceiling | **fail** | pass |
+| 2 | created/changed resource without a known price | **fail** | pass |
+| 3 | usage or input error (invalid plan, invalid premises) | **fail** | **fail** |
 
-Variável do repositório: `vars.COST_DELTA_CEILING_USD` (ex.: `10`). Premissas versionadas por
-stack em `stacks/<stack>/costgate-usage.json` (formato no `README.md` do costgate).
+Repository variable: `vars.COST_DELTA_CEILING_USD` (e.g. `10`). Premises versioned per stack in
+`stacks/<stack>/costgate-usage.json` (format in the costgate `README.md`).
 
 ## Workflow
 
@@ -56,7 +55,7 @@ jobs:
         with:
           terraform_wrapper: false
 
-      # (assume role por OIDC aqui, como no workflow de plan do foundation)
+      # (assume the plan role through OIDC here)
 
       - name: plan
         working-directory: ${{ env.STACK_DIR }}
@@ -76,9 +75,9 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      pull-requests: write # único job que comenta no PR
+      pull-requests: write # only job that comments on the PR
     env:
-      COSTGATE_VERSION: 0.1.0
+      COSTGATE_VERSION: 0.1.1
       STACK_DIR: stacks/org-services
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -155,13 +154,13 @@ jobs:
           esac
 ```
 
-## Notas
+## Notes
 
-| Ponto | Regra |
+| Topic | Rule |
 |---|---|
-| Várias stacks | um job `cost` por stack (matrix). O marcador é fixo; para separar comentários, prefixe o arquivo (`sed -i '1s/costgate/costgate:<stack>/' cost.md`) e ajuste o `startswith` |
-| Label `cost-approved` | quem pode aplicar label decide; proteja com regra de branch/CODEOWNERS se o PR for de terceiros. O evento `labeled` reroda o workflow |
-| PR de fork | não recebe `id-token` nem `pull-requests: write`; o foundation não aceita PR de fork para stacks |
-| Plan e OpenTofu | `tofu show -json` gera o mesmo formato (`format_version` 1.x) |
-| Atualizar o costgate | trocar `COSTGATE_VERSION`; o comando de verificação não muda |
-| Tamanho do comentário | GitHub limita a 65 536 caracteres; plan com centenas de recursos alterados pode exceder (não verificado) |
+| Several stacks | one `cost` job per stack (matrix). The marker is fixed; to keep separate comments, prefix the file (`sed -i '1s/costgate/costgate:<stack>/' cost.md`) and adjust the `startswith` filter |
+| `cost-approved` label | whoever can apply labels decides; protect it with branch rules/CODEOWNERS for third-party PRs. The `labeled` event re-runs the workflow |
+| Fork PRs | get neither `id-token` nor `pull-requests: write`; do not accept fork PRs for stacks |
+| OpenTofu | `tofu show -json` emits the same format (`format_version` 1.x) |
+| Upgrading costgate | change `COSTGATE_VERSION`; the verification command stays the same |
+| Comment size | GitHub caps comments at 65,536 characters; a plan with hundreds of changed resources may exceed it (not verified) |
