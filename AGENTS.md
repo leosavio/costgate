@@ -28,15 +28,27 @@ Bulk API e devolve Markdown/JSON + exit code para gate de PR. Primeiro consumido
 | `cmd/costgate` | Go 1.27, só stdlib | binário único; `-X main.version` no release |
 | `internal/plan` | parser de `show -json` (`format_version` 1.x) | rejeita state; Terraform e OpenTofu |
 | `internal/usage` | premissas JSON `schema_version` 1 | precedência resources > types > defaults > embutido |
-| `internal/catalog` | snapshot + `pricing refresh` (CSV em streaming) | regras de SKU em `rules.go`; `sha256` verificado no load |
+| `internal/catalog` | snapshot `schema_version` 2 + `pricing refresh` (CSV em streaming) | regras de SKU em `rules.go`; `sha256` verificado no load; lê v1 e v2 |
 | `internal/estimate` | fórmulas por tipo + lista de custo zero | `resources.go`; valores em `math/big.Rat` |
-| `internal/report` | gate (exit 0/1/2/3), Markdown com marcador, JSON `schema_version` 1 | |
+| `internal/report` | gate (exit 0/1/2/3), Markdown com marcador, JSON `schema_version` 1, JSON Lines | chaves da fatura por linha (`sku`, `usage_type`, `rate_code`, `billing_description`, `billing_rule`) |
 | `pricing/us-east-1.json` | snapshot embutido (`go:embed`) | 1415 preços, as of 2026-11-03 |
 | CI | GitHub Actions: `ci.yml` (lint + matriz nativa de teste linux/darwin × amd64/arm64), `release.yml` (cosign keyless), `install-smoke.yml` (brew, go install e tarball nas 4 plataformas), `refresh-pricing.yml` (semanal; `dry_run_pr` prova o PR) | actions por SHA |
 
 ## Estado atual (onde parei)
 
-> Última atualização: 2026-11-03 (3ª sessão)
+> Última atualização: 2026-11-03 (4ª sessão)
+
+4ª sessão (issue leosavio-org#26, camada 1): **v0.2.0** publicada. Cada linha de custo do JSON
+ganhou `sku`, `usage_type` bruto, `rate_code`, `billing_description` e `billing_rule`
+(`fixed_hourly`/`fixed_monthly`/`usage`); `--json-lines` grava um documento por linha; o Markdown
+ganhou o bloco recolhido "Billing keys". Snapshot `schema_version` 2 (rate code, usage type bruto,
+`service_name`, `location`, `tiers`); o load lê v1 e v2 e confere a versão antes dos campos. Totais
+dos goldens iguais aos da v0.1.1; o snapshot real regerado tem a mesma primeira faixa em todos os
+1415 preços. O dry run do refresh agora registra o run de `ci` do PR de teste (criado em
+`action_required`, doc do `GITHUB_TOKEN`) e o apaga num job com `actions: write`. Release: tap
+atualizado pelo `release.yml`, `install-smoke` disparou por `workflow_run` e passou nas 12 células.
+Camadas 2 e 3 (`record`, `ledger`, conciliação) aguardam decisão do operador.
+
 
 3ª sessão (issue leosavio-org#23): `ci.yml` testa nativo em `ubuntu-24.04`, `ubuntu-24.04-arm`,
 `macos-15` e `macos-15-intel` (goldens byte a byte em todas); `install-smoke.yml` passou nas 12
@@ -68,7 +80,7 @@ go test ./internal/cli -update                       # regrava goldens; revisar 
 GOARCH=amd64 go test ./...                           # determinismo cross-arch (Rosetta)
 go run ./cmd/costgate pricing refresh                # baixa a Bulk API pública (~12 s), grava pricing/us-east-1.json
 go run ./cmd/costgate pricing verify
-go run ./cmd/costgate diff --plan testdata/cases/baseline/plan.json --usage testdata/cases/baseline/usage.json --max-monthly-delta 50
+go run ./cmd/costgate diff --plan testdata/cases/baseline/plan.json --usage testdata/cases/baseline/usage.json --max-monthly-delta 50 --json-lines /tmp/lines.jsonl
 git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z   # release.yml: binários, checksums, assinatura, fórmula no tap
 sh scripts/homebrew-formula.sh X.Y.Z checksums.txt    # fórmula manual (fallback sem deploy key)
 ```
