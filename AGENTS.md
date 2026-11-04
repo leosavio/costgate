@@ -1,7 +1,7 @@
 ---
 type: guide
 summary: "Contrato de contexto do repo costgate para agentes: CLI Go (MIT) que projeta o custo mensal AWS de um terraform/tofu plan com snapshot da Price List Bulk API e gate fail-closed de PR."
-updated: 2026-11-03
+updated: 2026-11-04
 tags: [agents, aws, cost, terraform]
 ---
 
@@ -36,7 +36,14 @@ Bulk API e devolve Markdown/JSON + exit code para gate de PR. Primeiro consumido
 
 ## Estado atual (onde parei)
 
-> Última atualização: 2026-11-03 (4ª sessão)
+> Última atualização: 2026-11-04 (5ª sessão)
+
+5ª sessão: `docs/how-it-works.md` (cinco diagramas Mermaid: visão geral, refresh do snapshot,
+`diff`, gate e CI, mais o NAT do baseline de ponta a ponta) e `docs/comparison.md` (costgate ×
+Infracost CLI 2.x e Cloud, conferida em 2026-11-04 com fonte por linha). READMEs EN e PT-BR ganharam
+"How it works" e "costgate and Infracost". Diagramas renderizados com `@mermaid-js/mermaid-cli` 11
+antes do commit. Sem release (só docs).
+
 
 4ª sessão (issue leosavio-org#26, camada 1): **v0.2.0** publicada. Cada linha de custo do JSON
 ganhou `sku`, `usage_type` bruto, `rate_code`, `billing_description` e `billing_rule`
@@ -70,6 +77,7 @@ Operador confirmou D4/D5 da ADR-001. Integração com o foundation **só documen
 - [ ] Resolver `subnet_ids` desconhecido pela seção `configuration` do plan (hoje usa `az_count`)
 - [ ] ASG + launch template (`desired_capacity` × tipo)
 - [ ] Mapear T3-03 Network Firewall, T3-06 Route 53 Profiles, T3-08 IPAM Advanced e VPC Encryption Controls quando um módulo os usar
+- [ ] Reconferir `docs/comparison.md` nas fontes do Infracost a cada release do costgate (afirmação sobre terceiro, datada 2026-11-04)
 - [ ] homebrew-core quando o repo tiver ≥ 30 dias e 75 stars, 30 forks ou 30 watchers (fórmula compilando do fonte)
 
 ## Comandos essenciais
@@ -91,6 +99,8 @@ sh scripts/homebrew-formula.sh X.Y.Z checksums.txt    # fórmula manual (fallbac
 |---|---|
 | ADRs | docs/adr/ |
 | Integração de CI (consumidor) | docs/integration/github-actions.md |
+| Funcionamento interno (diagramas) | docs/how-it-works.md |
+| Comparação com o Infracost (datada, com fontes) | docs/comparison.md |
 | Mapa recurso → SKU | internal/catalog/rules.go · internal/estimate/resources.go · README.md §Recursos cobertos |
 | Tech debt | docs/tech-debt.md (a criar no primeiro débito) |
 
