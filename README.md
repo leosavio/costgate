@@ -16,6 +16,43 @@ ceiling or when a resource has no known price. Single Go binary, offline, no AWS
 Design decisions: [ADR-001](docs/adr/001-go-snapshot-bulk-api-e-fail-closed.md) (Go, Bulk API
 snapshot, fail-closed; written in Portuguese).
 
+## How it works
+
+```mermaid
+flowchart LR
+  subgraph prices["Prices: weekly, in this repository"]
+    direction TB
+    api["AWS Price List Bulk API<br/>public files, no credential"] --> refresh["costgate pricing refresh"]
+    refresh --> snap["pricing/us-east-1.json<br/>schema_version 2, sha256"]
+    snap --> pr["pull request opened by<br/>refresh-pricing.yml, reviewed"]
+    pr --> bin["costgate release<br/>snapshot embedded in the binary"]
+  end
+  subgraph estimate["Estimate: every pull request, in your CI"]
+    direction TB
+    plan["plan.json<br/>from terraform show -json<br/>or tofu show -json"] --> diff["costgate diff"]
+    usage["usage.json<br/>premises, optional"] --> diff
+    diff --> md["Markdown<br/>PR comment"]
+    diff --> js["JSON report<br/>and JSON Lines"]
+    diff --> code["exit code<br/>0, 1, 2 or 3"]
+  end
+  bin --> diff
+```
+
+A weekly workflow turns the public AWS Price List into a versioned snapshot that ships inside the
+binary. `costgate diff` reads only the plan JSON, the optional premises file and that snapshot: no
+account, no network, no clock. The step-by-step path, the exit code logic and one resource priced
+end to end are in [docs/how-it-works.md](docs/how-it-works.md).
+
+## costgate and Infracost
+
+Both read a Terraform or OpenTofu plan and comment the monthly cost on the pull request.
+[Infracost](https://www.infracost.io) covers AWS, Azure and Google (over 1,100 resources), also
+reads HCL without a plan, and adds guardrails, policies and dashboards in its paid Cloud plan; it
+needs an Infracost login and queries its pricing API while estimating. costgate covers AWS only,
+runs with no account and no network, fails the check on any resource it cannot price, and labels
+each cost line with the keys of the AWS bill. Full table with sources, checked on 2026-11-04:
+[docs/comparison.md](docs/comparison.md).
+
 ## Install
 
 Homebrew (macOS and Linux), from the [`leosavio/homebrew-tap`](https://github.com/leosavio/homebrew-tap) tap:

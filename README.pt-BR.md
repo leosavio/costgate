@@ -17,6 +17,43 @@ recurso sem preço conhecido. Binário único em Go, offline, sem credencial AWS
 
 Decisões: [ADR-001 (Go, snapshot da Bulk API e fail-closed)](docs/adr/001-go-snapshot-bulk-api-e-fail-closed.md).
 
+## Como funciona
+
+```mermaid
+flowchart LR
+  subgraph prices["Preços: toda semana, neste repositório"]
+    direction TB
+    api["AWS Price List Bulk API<br/>arquivos públicos, sem credencial"] --> refresh["costgate pricing refresh"]
+    refresh --> snap["pricing/us-east-1.json<br/>schema_version 2, sha256"]
+    snap --> pr["pull request aberto pelo<br/>refresh-pricing.yml, revisado"]
+    pr --> bin["release do costgate<br/>snapshot embutido no binário"]
+  end
+  subgraph estimate["Estimativa: todo pull request, no seu CI"]
+    direction TB
+    plan["plan.json<br/>de terraform show -json<br/>ou tofu show -json"] --> diff["costgate diff"]
+    usage["usage.json<br/>premissas, opcional"] --> diff
+    diff --> md["Markdown<br/>comentário do PR"]
+    diff --> js["relatório JSON<br/>e JSON Lines"]
+    diff --> code["exit code<br/>0, 1, 2 ou 3"]
+  end
+  bin --> diff
+```
+
+Um workflow semanal transforma a Price List pública da AWS num snapshot versionado que vai dentro do
+binário. O `costgate diff` lê só o plan JSON, o arquivo opcional de premissas e esse snapshot: sem
+conta, sem rede, sem relógio. O caminho passo a passo, a lógica do exit code e um recurso
+precificado de ponta a ponta estão em [docs/how-it-works.md](docs/how-it-works.md) (em inglês).
+
+## costgate e Infracost
+
+Os dois leem um plan do Terraform ou do OpenTofu e comentam o custo mensal no pull request. O
+[Infracost](https://www.infracost.io) cobre AWS, Azure e Google (mais de 1.100 recursos), também lê
+HCL sem plan e soma guardrails, policies e dashboards no plano pago Cloud; exige login no Infracost
+e consulta a API de preços dele durante a estimativa. O costgate cobre só AWS, roda sem conta e sem
+rede, falha o check em qualquer recurso que não sabe precificar e marca cada linha de custo com as
+chaves da fatura da AWS. Tabela completa com fontes, conferida em 2026-11-04:
+[docs/comparison.md](docs/comparison.md) (em inglês).
+
 ## Instalação
 
 Release (darwin/linux, arm64/amd64), com verificação de checksum e assinatura keyless:
