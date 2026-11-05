@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>costgate: AWS cost of a Terraform plan, fail-closed and offline</title>
+  <meta name="description" content="costgate projects the monthly AWS cost of a Terraform or OpenTofu plan, before vs. after per resource, and gates the pull request by exit code, offline and with no AWS credential.">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>costgate</h1>
+    <p>Monthly AWS cost projection of a <code>terraform plan</code> (or <code>tofu plan</code>), before vs. after per resource, with a pull request gate. Single Go binary, offline, no AWS credential, no SaaS.</p>
+  </header>
+
+  <main>
+    <section id="what-it-does">
+      <h2>What it does</h2>
+      <ul>
+        <li>Shows the monthly cost <strong>before vs. after</strong> for each resource in the plan.</li>
+        <li>Gates the pull request by exit code: a distinct code when the delta exceeds a ceiling or a resource has no known price.</li>
+        <li><strong>Fail-closed</strong>: a created or changed resource it cannot price fails the check (exit 2). No unknown resource silently becomes US$ 0.</li>
+        <li>Runs offline with no AWS credential: prices come from a versioned snapshot of the public AWS Price List Bulk API, embedded in the binary.</li>
+        <li>Each cost line carries the keys of the AWS bill (SKU, usage type, rate code, invoice description), so it can be matched against the Cost and Usage Report.</li>
+      </ul>
+    </section>
+
+    <section id="install">
+      <h2>Install</h2>
+      <p>Homebrew (macOS and Linux):</p>
+      <pre><code>brew install leosavio/tap/costgate</code></pre>
+      <p>Homebrew 7.0.11 and later refuse formulae from non-official taps until you trust them. If <code>brew install</code> stops with "Refusing to load formula ... from untrusted tap", run this and install again:</p>
+      <pre><code>brew trust --formula leosavio/tap/costgate</code></pre>
+      <p>Go toolchain:</p>
+      <pre><code>go install github.com/leosavio/costgate/cmd/costgate@latest</code></pre>
+      <p>Or download a <a href="https://github.com/leosavio/costgate#install">signed release archive</a> (darwin/linux, arm64/amd64) and verify its checksum and keyless signature.</p>
+    </section>
+
+    <section id="quick-start">
+      <h2>Quick start</h2>
+      <pre><code>terraform show -json tfplan &gt; plan.json
+costgate diff --plan plan.json --max-monthly-delta 10</code></pre>
+      <p>Exit 0: everything priced and within the ceiling. Exit 1: above the ceiling. Exit 2: a created or changed resource has no known price. Exit 3: usage or input error.</p>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How it works</h2>
+      <p>A weekly workflow turns the public AWS Price List into a versioned snapshot that ships inside the binary. <code>costgate diff</code> reads only the plan JSON, an optional usage premises file and that snapshot: no account, no network, no clock.</p>
+      <p><a href="https://github.com/leosavio/costgate/blob/main/docs/how-it-works.md">Read how it works</a></p>
+    </section>
+
+    <section id="infracost">
+      <h2>costgate and Infracost</h2>
+      <p>Both read a Terraform or OpenTofu plan and comment the monthly cost on the pull request. Infracost covers AWS, Azure and Google and queries its pricing API with an Infracost login; costgate covers AWS only, runs with no account and no network, and fails the check on any resource it cannot price.</p>
+      <p><a href="https://github.com/leosavio/costgate/blob/main/docs/comparison.md">Full comparison with sources</a></p>
+    </section>
+
+    <section id="links">
+      <h2>Links</h2>
+      <ul>
+        <li><a href="https://github.com/leosavio/costgate">Repository</a></li>
+        <li><a href="https://github.com/leosavio/costgate#readme">README</a></li>
+        <li><a href="https://github.com/leosavio/costgate/releases">Releases</a></li>
+        <li><a href="https://github.com/leosavio/costgate/blob/main/docs/integration/github-actions.md">GitHub Actions integration</a></li>
+      </ul>
+    </section>
+
+    <section id="privacy">
+      <h2>Privacy</h2>
+      <p>This page counts visits without cookies. It sends one anonymous event per browser tab, and only after the page has been visible for 5 seconds or after a click or key press. The event carries a random session id kept in <code>sessionStorage</code>, the time, the device class (mobile or desktop) and where the visit came from (the README link or another page). It carries no IP address, cookie or fingerprint, and this page sets no cookie. Automated browsers that identify themselves are not counted. The costgate binary itself never sends data.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p><a href="https://github.com/leosavio/costgate">MIT License</a></p>
+  </footer>
+
+  <script src="/ping.js" defer></script>
+</body>
+</html>

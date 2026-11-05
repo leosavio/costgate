@@ -1,7 +1,7 @@
 ---
 type: guide
 summary: "Contrato de contexto do repo costgate para agentes: CLI Go (MIT) que projeta o custo mensal AWS de um terraform/tofu plan com snapshot da Price List Bulk API e gate fail-closed de PR."
-updated: 2026-11-04
+updated: 2026-11-05
 tags: [agents, aws, cost, terraform]
 ---
 
@@ -32,11 +32,21 @@ Bulk API e devolve Markdown/JSON + exit code para gate de PR. Primeiro consumido
 | `internal/estimate` | fórmulas por tipo + lista de custo zero | `resources.go`; valores em `math/big.Rat` |
 | `internal/report` | gate (exit 0/1/2/3), Markdown com marcador, JSON `schema_version` 1, JSON Lines | chaves da fatura por linha (`sku`, `usage_type`, `rate_code`, `billing_description`, `billing_rule`) |
 | `pricing/us-east-1.json` | snapshot embutido (`go:embed`) | 1415 preços, as of 2026-11-03 |
+| `site/` | landing estática (Cloudflare Pages, stack `site-cdn-dns-central/cf-pages/costgate-site`) | `ping.js`: 1 evento por aba, sem cookie, filtros de robô; só a página mede |
+| `scripts/adoption-stats.sh` | sh + `gh` + `jq` | métricas de adoção do mantenedor; dado no repo privado `costgate-metrics` |
 | CI | GitHub Actions: `ci.yml` (lint + matriz nativa de teste linux/darwin × amd64/arm64), `release.yml` (cosign keyless), `install-smoke.yml` (brew, go install e tarball nas 4 plataformas), `refresh-pricing.yml` (semanal; `dry_run_pr` prova o PR) | actions por SHA |
 
 ## Estado atual (onde parei)
 
-> Última atualização: 2026-11-04 (5ª sessão)
+> Última atualização: 2026-11-05 (6ª sessão)
+
+6ª sessão (métricas de adoção, decisões do operador de 2026-11-05): `scripts/adoption-stats.sh`
+coleta traffic, downloads, stars e os jobs do nosso CI (descontados), e o repo privado
+`leosavio/costgate-metrics` guarda a série com launchd semanal (`com.tars.costgate-adoption`).
+`site/` é a landing com beacon para o ping (serviços `costgate-readme`, `costgate-github`,
+`costgate-site`), testada em Chrome headless: robô e `webdriver` não contam, 5 s de página visível
+contam. Publicação no Cloudflare Pages aguarda apply no `site-cdn-dns-central` (branch
+`feat/costgate-site`); o link `?ref=readme` entra no README depois do site no ar.
 
 5ª sessão: `docs/how-it-works.md` (cinco diagramas Mermaid: visão geral, refresh do snapshot,
 `diff`, gate e CI, mais o NAT do baseline de ponta a ponta) e `docs/comparison.md` (costgate ×
@@ -113,3 +123,5 @@ sh scripts/homebrew-formula.sh X.Y.Z checksums.txt    # fórmula manual (fallbac
 - Snapshot só via `pricing refresh`; edição à mão quebra o `sha256` e o load recusa.
 - Nada que dependa de recurso exclusivo do Terraform: o formato lido é o comum com o OpenTofu.
 - Actions por SHA com tag em comentário, `permissions:` mínimas, `persist-credentials: false`.
+- O binário nunca envia dado (promessa de `docs/how-it-works.md`). Medição de adoção só na landing
+  (`site/ping.js`, sem cookie) e na API do GitHub pelo mantenedor; nada de telemetria no CLI.
