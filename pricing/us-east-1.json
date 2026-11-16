@@ -2,15 +2,15 @@
   "schema_version": 2,
   "region": "us-east-1",
   "currency": "USD",
-  "as_of": "2026-11-03T00:09:47Z",
-  "sha256": "b27de59b08836c188cfa5bb1c758b2246392b90280def70f26d1c49f27daa0be",
+  "as_of": "2026-11-16T07:13:00Z",
+  "sha256": "dd107da794a43b8157b3d3c89fd259eaa617c1e0c49e2435b608d2dd18adf8dd",
   "sources": [
     {
       "service": "AWSCertificateManager",
       "scope": "region",
-      "version": "20261022154217",
-      "publication_date": "2026-10-22T15:42:17Z",
-      "path": "/offers/v1.0/aws/AWSCertificateManager/20261022154217/us-east-1/index.csv"
+      "version": "20261113195136",
+      "publication_date": "2026-11-13T19:51:36Z",
+      "path": "/offers/v1.0/aws/AWSCertificateManager/20261113195136/us-east-1/index.csv"
     },
     {
       "service": "AWSCloudTrail",
@@ -22,44 +22,44 @@
     {
       "service": "AmazonEC2",
       "scope": "region",
-      "version": "20261029175634",
-      "publication_date": "2026-10-29T17:56:34Z",
-      "path": "/offers/v1.0/aws/AmazonEC2/20261029175634/us-east-1/index.csv"
+      "version": "20261114012926",
+      "publication_date": "2026-11-14T01:29:26Z",
+      "path": "/offers/v1.0/aws/AmazonEC2/20261114012926/us-east-1/index.csv"
     },
     {
       "service": "AmazonRoute53",
       "scope": "global",
-      "version": "20260911124504",
-      "publication_date": "2026-09-11T12:45:04Z",
+      "version": "20261114014705",
+      "publication_date": "2026-11-14T01:47:05Z",
       "path": "/offers/v1.0/aws/AmazonRoute53/current/index.csv"
     },
     {
       "service": "AmazonRoute53",
       "scope": "region",
-      "version": "20260911124504",
-      "publication_date": "2026-09-11T12:45:04Z",
-      "path": "/offers/v1.0/aws/AmazonRoute53/20260911124504/us-east-1/index.csv"
+      "version": "20261114014705",
+      "publication_date": "2026-11-14T01:47:05Z",
+      "path": "/offers/v1.0/aws/AmazonRoute53/20261114014705/us-east-1/index.csv"
     },
     {
       "service": "AmazonS3",
       "scope": "region",
-      "version": "20261015173540",
-      "publication_date": "2026-10-15T17:35:40Z",
-      "path": "/offers/v1.0/aws/AmazonS3/20261015173540/us-east-1/index.csv"
+      "version": "20261116071300",
+      "publication_date": "2026-11-16T07:13:00Z",
+      "path": "/offers/v1.0/aws/AmazonS3/20261116071300/us-east-1/index.csv"
     },
     {
       "service": "AmazonVPC",
       "scope": "region",
-      "version": "20261103000947",
-      "publication_date": "2026-11-03T00:09:47Z",
-      "path": "/offers/v1.0/aws/AmazonVPC/20261103000947/us-east-1/index.csv"
+      "version": "20261105181945",
+      "publication_date": "2026-11-05T18:19:45Z",
+      "path": "/offers/v1.0/aws/AmazonVPC/20261105181945/us-east-1/index.csv"
     },
     {
       "service": "awskms",
       "scope": "region",
-      "version": "20261026201814",
-      "publication_date": "2026-10-26T20:18:14Z",
-      "path": "/offers/v1.0/aws/awskms/20261026201814/us-east-1/index.csv"
+      "version": "20261108172342",
+      "publication_date": "2026-11-08T17:23:42Z",
+      "path": "/offers/v1.0/aws/awskms/20261108172342/us-east-1/index.csv"
     }
   ],
   "prices": {
