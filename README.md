@@ -1,5 +1,10 @@
 # costgate
 
+[![CI](https://github.com/leosavio/costgate/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/leosavio/costgate/actions/workflows/ci.yml?query=branch%3Amain)
+[![Release](https://img.shields.io/github/v/release/leosavio/costgate)](https://github.com/leosavio/costgate/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
+[![Go 1.27](https://img.shields.io/badge/go-1.27-00ADD8)](go.mod)
+
 🇺🇸 English · 🇧🇷 [Português](README.pt-BR.md)
 
 Monthly AWS cost projection of a `terraform plan` (or `tofu plan`), **before vs. after** per
