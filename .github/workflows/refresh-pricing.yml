@@ -1,10 +1,13 @@
 name: refresh-pricing
 
 # Weekly: download the public Price List Bulk API files (no AWS credential),
-# rebuild every embedded snapshot (pricing/<region>.json) and open a PR only
-# when a price changed. A refresh that changes only as_of, sha256 or the
-# offer file versions opens nothing (scripts/pricing-diff.sh compares the
-# "prices" maps; a rule change shows up there as added or removed keys).
+# rebuild the embedded snapshot of every region (pricing/<region>.json.gz,
+# scripts/refresh-all.sh, which keeps the file of a region whose prices did
+# not change) and open a PR only when a price changed. A refresh that changes
+# only as_of, sha256 or the offer file versions opens nothing
+# (scripts/pricing-diff.sh compares the "prices" maps; a rule change shows up
+# there as added or removed keys). us-east-1 is refreshed with --strict: a
+# pricing rule without a price there means the offer format changed.
 # Every refresh uses one rolling branch, pricing/refresh, owned by the bot:
 # it is rewritten (force push) on each run and its open PR is updated, so a
 # reviewer finds one PR with the latest prices. Do not push to it by hand.
@@ -43,7 +46,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: write # push the refresh branch (and delete the test branch)
       pull-requests: write # open or update the PR (and close the test PR)
@@ -64,15 +67,14 @@ jobs:
           go-version-file: go.mod
           cache: false
 
-      - name: refresh every embedded region
+      - name: refresh every region
         run: |
           set -eu
           go build -o "$RUNNER_TEMP/costgate" ./cmd/costgate
-          for f in pricing/*.json; do
-            r="$(basename "$f" .json)"
-            "$RUNNER_TEMP/costgate" pricing refresh --region "$r" --out "$f"
-            # The binary embeds the old snapshots: verify the new file explicitly.
-            "$RUNNER_TEMP/costgate" pricing verify --region "$r" --pricing "$f"
+          COSTGATE="$RUNNER_TEMP/costgate" JOBS=4 bash scripts/refresh-all.sh
+          # The binary embeds the old snapshots: verify every file explicitly.
+          for f in pricing/*.json.gz; do
+            "$RUNNER_TEMP/costgate" pricing verify --region "$(basename "$f" .json.gz)" --pricing "$f" >/dev/null
           done
 
       - name: test with the new snapshots
@@ -93,16 +95,16 @@ jobs:
 
       # Synthetic, marked change. Applied after the tests, only on the test
       # branch; the PR is never merged.
+      # The snapshots are gzip, so the PR diff cannot show a marker inside
+      # them: the dry run adds a text file next to them (not embedded).
       - name: mark snapshot (dry run)
         if: env.DRY_RUN == 'true'
         env:
           RUN_ID: ${{ github.run_id }}
         run: |
           set -eu
-          f=pricing/us-east-1.json
-          jq --arg m "refresh-pricing dry run ${RUN_ID}; do not merge" '{test_marker: $m} + .' "$f" > "$f.tmp"
-          mv "$f.tmp" "$f"
-          git diff --stat -- pricing/
+          printf 'test_marker: refresh-pricing dry run %s; do not merge\n' "$RUN_ID" > pricing/test-marker.txt
+          git status --short -- pricing/
 
       - name: open or update the refresh PR
         id: pr
@@ -128,7 +130,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"
-          git add pricing/*.json
+          git add pricing/
           git commit -m "$title"
           if [ "$DRY_RUN" = true ]; then
             git push origin "$branch"
@@ -165,7 +167,7 @@ jobs:
           [ "$author" = "github-actions[bot]" ] || { echo "author is $author"; exit 1; }
           [ "$labels" = "$TEST_LABEL" ] || { echo "labels are $labels"; exit 1; }
           [ "$base" = main ] || { echo "base is $base"; exit 1; }
-          gh pr diff "$n" --repo "$GITHUB_REPOSITORY" | grep -q '^+  "test_marker": ' || { echo "marker not in PR diff"; exit 1; }
+          gh pr diff "$n" --repo "$GITHUB_REPOSITORY" | grep -q '^+test_marker: ' || { echo "marker not in PR diff"; exit 1; }
           echo "### dry run PR: $URL (author $author, label $labels)" >> "$GITHUB_STEP_SUMMARY"
           # The ci run of a PR opened with GITHUB_TOKEN waits for approval.
           # Record what GitHub created; do not fail the proof on it.

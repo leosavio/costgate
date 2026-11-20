@@ -18,7 +18,7 @@ flowchart LR
   subgraph prices["Prices: weekly, in this repository"]
     direction TB
     api["AWS Price List Bulk API<br/>public files, no credential"] --> refresh["costgate pricing refresh"]
-    refresh --> snap["pricing/us-east-1.json, us-west-2.json<br/>schema_version 2, sha256"]
+    refresh --> snap["pricing/&lt;region&gt;.json.gz, 36 regions<br/>schema_version 2, sha256"]
     snap --> pr["pull request opened by<br/>refresh-pricing.yml, reviewed"]
     pr --> bin["costgate release<br/>snapshot embedded in the binary"]
   end
@@ -58,7 +58,7 @@ flowchart TD
   keep -- yes --> key["price key<br/>service, usage type without region prefix, operation"]
   key --> entry["snapshot entry<br/>SKU, rate code, raw usage type, unit,<br/>USD price, description, later tiers"]
   entry --> seal["seal<br/>as_of = newest publication date of the files<br/>sha256 of the content"]
-  seal --> out["pricing/us-east-1.json or us-west-2.json<br/>one file per region"]
+  seal --> out["pricing/&lt;region&gt;.json.gz<br/>one gzip file per region, same bytes for the same prices"]
 ```
 
 1. The refresh reads the public index of the
@@ -112,7 +112,7 @@ flowchart TD
   ign -- yes --> ignored["listed as ignored<br/>out of the estimate and the gate"]
   ign -- no --> zero{"type without a charge<br/>of its own?"}
   zero -- yes --> free["no charge"]
-  zero -- no --> known{"AWS provider?<br/>formula for the type?<br/>region of the resource = --region?"}
+  zero -- no --> known{"AWS provider?<br/>formula for the type?<br/>snapshot of the resource region?"}
   known -- no --> unpriced["unpriced, with the reason<br/>provider, type, region, config or price"]
   known -- yes --> comps["cost components<br/>quantity x unit price x factor, exact decimals"]
   comps --> found{"price key<br/>in the snapshot?"}
@@ -129,9 +129,9 @@ flowchart TD
 
 | Input | What is read | What is refused (exit 3) |
 |---|---|---|
-| Plan, from `terraform show -json <planfile>` or `tofu show -json` | `format_version` and, for each entry of `resource_changes`: address, mode, type, provider, actions, `before`, `after`, `after_unknown`; from `configuration`: the `provider_config_key` of each resource and the constant `region` of each provider configuration | a state file (no `planned_values` nor `resource_changes`), a `format_version` other than 1.x, an unknown list of actions |
+| Plan, from `terraform show -json <planfile>` or `tofu show -json` | `format_version` and, for each entry of `resource_changes`: address, mode, type, provider, actions, `before`, `after`, `after_unknown`; from `configuration`: the `provider_config_key` of each resource and the `region` of each provider configuration (a constant, or a root variable whose value is in `variables`) | a state file (no `planned_values` nor `resource_changes`), a `format_version` other than 1.x, an unknown list of actions |
 | Premises file (`--usage`) | per-field values for hours, GB, Spot discount, events, AZ count, root volume size, EKS extended support hours, EKS Auto Mode instance hours by type | `schema_version` other than 1, unknown fields, values out of range (hours above 744, Spot discount of 1 or more, negative values), a key of `auto_mode_instance_hours` that is not an instance type |
-| Price snapshot | the embedded file of `--region`, or `--pricing <file>` | wrong `sha256`, unknown fields, `schema_version` outside 1 to 2, currency other than USD, region different from `--region` |
+| Price snapshots | the embedded file of each region the plan uses (all 36 regions are embedded, gzip), or a `--pricing <file>` (JSON or gzip, repeatable) that replaces the embedded one of its region | wrong `sha256`, unknown fields, `schema_version` outside 1 to 2, currency other than USD, two `--pricing` files of one region, no snapshot for the default region |
 
 Data sources (`mode = data`) and `read` actions are skipped. Each action decides which sides exist:
 `create` has only an after side, `delete` only a before side, `update` and `replace` (delete and
@@ -156,18 +156,24 @@ report lists them as "not declared", so a missing premise is visible.
 
 ### Region of each resource
 
-A snapshot has the prices of one region. For each side, costgate takes the region from the first
-source that has it: the resource's `region` attribute (AWS provider 6.x); the constant `region`
-of its provider configuration (`provider_config_key` of the resource in `configuration`); the
-region of its own ARN, or of its nested ARNs when they all agree; the one region that every other
-resource of the same provider configuration names through its attribute or ARN. A region from a
-variable or a local is not in the plan, so the last source covers the common
-`region = var.region` case for resources without ARN. When none applies, the side is priced in
-`--region`.
+A snapshot has the prices of one region, and each side of each resource is priced with the
+snapshot of its own region, loaded on first use. For each side, costgate takes the region from
+the first source that has it: the resource's `region` attribute (AWS provider 6.x); the region of
+its provider configuration (`provider_config_key` of the resource in `configuration`) when the
+plan states it, as a constant or as a root module variable alone (`region = var.region`, value in
+the plan's `variables`); the region of its own ARN, or of its nested ARNs when they all agree;
+the one region that every other resource of the same provider configuration names through its
+attribute or ARN, which covers a resource without ARN in a configuration with
+`region = local.region`; for the after side, the region of the before side.
 
-A provider configuration whose region (constant, or learned from its resources) differs from
-`--region` adds a `region_mismatch` warning at the top of every output, with the command that
-prices the plan in its region.
+When none applies, the side is priced in the default region: `--region`, else the region of the
+only `--pricing` file, else the only region the plan names, else `us-east-1`. A replace that
+moves a resource to another region prices each side in its own region.
+
+| Warning | When | Fix it names |
+|---|---|---|
+| `region_mismatch` | a provider configuration deploys to a region costgate has no snapshot of (China, or a region the Price List does not list yet) | `--pricing` with a snapshot of that region, or `pricing refresh` when refresh supports it |
+| `region_assumed` | resources whose region the plan does not state were priced in a default region the caller did not choose | `--region <region>` |
 
 ### Pricing each resource
 
@@ -179,7 +185,7 @@ For each side of each resource:
    costs nothing and needs no price.
 3. A resource of another provider (reason `provider`), a type without a formula in
    [`internal/estimate/resources.go`](../internal/estimate/resources.go) (`type`), or a resource
-   in another region than `--region` (`region`) is **unpriced**, with the reason. So is a
+   in a region costgate has no snapshot of (`region`) is **unpriced**, with the reason. So is a
    configuration the formula does not model (`config`: EBS io1/io2, regional NAT gateway,
    CloudTrail data events…).
 4. Otherwise the formula returns cost components. Each component is

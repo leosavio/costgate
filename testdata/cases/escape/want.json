@@ -73,6 +73,14 @@
       }
     ]
   },
+  "snapshots": [
+    {
+      "region": "us-east-1",
+      "as_of": "2026-11-11T15:35:57Z",
+      "sha256": "15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744",
+      "resources": 3
+    }
+  ],
   "totals": {
     "monthly_before": 0.0000,
     "monthly_after": 1.0000,
@@ -102,7 +110,9 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": true
+      "blocking": true,
+      "region": "us-east-1",
+      "region_assumed": true
     },
     {
       "address": "aws_kms_key.app[\"</script><img src=x onerror=alert(1)>\"]",
@@ -131,7 +141,8 @@
         ]
       },
       "delta": 1.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_s3_bucket.b[\"<img src=x onerror=alert(1)>\"]",
@@ -161,7 +172,9 @@
         ]
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1",
+      "region_assumed": true
     },
     {
       "address": "module.m[\"a.b</script><img src=x onerror=alert(1)>\"].aws_kms_key.k",
@@ -176,7 +189,9 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": true
+      "blocking": true,
+      "region": "us-east-1",
+      "region_assumed": true
     }
   ],
   "usage_not_declared": [

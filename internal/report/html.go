@@ -52,6 +52,8 @@ type htmlView struct {
 	Footer    string           `json:"footer"`
 	Short     string           `json:"sha256_short"`
 	Status    htmlStatusLabels `json:"status_text"`
+	// SnapshotsText names the snapshots of the run, as the Markdown footer.
+	SnapshotsText string `json:"snapshots_text"`
 }
 
 type htmlStatusLabels struct {
@@ -129,10 +131,26 @@ type htmlPremise struct {
 }
 
 type htmlRegion struct {
+	// Priced is the region of the resources the plan does not place, and
+	// From how it was chosen (estimate.RegionFrom*).
 	Priced   string `json:"priced"`
+	From     string `json:"from"`
 	Snapshot string `json:"snapshot"`
-	// Mismatch lists the resources unpriced because their region differs.
+	// Snapshots lists every snapshot used; Multi is true when resources
+	// are priced in more than one region.
+	Snapshots []htmlSnapshot `json:"snapshots"`
+	Multi     bool           `json:"multi"`
+	// Mismatch lists the resources unpriced because costgate has no
+	// snapshot of their region.
 	Mismatch []int `json:"mismatch"`
+}
+
+type htmlSnapshot struct {
+	Region    string `json:"region"`
+	AsOf      string `json:"as_of"`
+	SHA256    string `json:"sha256"`
+	Short     string `json:"sha256_short"`
+	Resources int    `json:"resources"`
 }
 
 // HTML renders the report as one self-contained page: the data, the style
@@ -175,14 +193,20 @@ func buildView(in Input) (htmlView, error) {
 		Resources: []htmlRow{},
 		Unpriced:  []htmlUnpriced{},
 		Premises:  []htmlPremise{},
-		Region:    htmlRegion{Priced: res.Region, Snapshot: p.Region, Mismatch: []int{}},
-		CSVHeader: csvHeader,
-		Footer:    disclaimer,
-		Short:     shortSHA(p.SHA256),
+		Region: htmlRegion{Priced: res.Region, From: res.RegionFrom, Snapshot: p.Region, Snapshots: []htmlSnapshot{},
+			Multi: multiRegion(res), Mismatch: []int{}},
+		CSVHeader:     csvHeader,
+		Footer:        disclaimer,
+		SnapshotsText: snapshotsText(in, ""),
+		Short:         shortSHA(p.SHA256),
 		Status: htmlStatusLabels{
 			Title:    statusTitle(in.Verdict.Status),
 			Headline: signedUSD(res.Delta) + "/month",
 		},
+	}
+	for _, u := range res.Snapshots {
+		v.Region.Snapshots = append(v.Region.Snapshots, htmlSnapshot{Region: u.Region, AsOf: u.Snapshot.AsOf,
+			SHA256: u.Snapshot.SHA256, Short: shortSHA(u.Snapshot.SHA256), Resources: u.Resources})
 	}
 	byCategory := map[string]int{}
 	for _, c := range unpricedCategories {
@@ -307,8 +331,8 @@ var unpricedCategories = []struct{ key, title, hint string }{
 		"Resources of other providers (helm, kubectl, kubernetes…) have no AWS list price. --ignore-provider <name> leaves them out of the estimate and of the gate."},
 	{estimate.ReasonType, "Resource type not in the pricing map",
 		"costgate has no formula for the type, so it cannot prove a cost."},
-	{estimate.ReasonRegion, "Region differs from the priced region",
-		"Price the plan with a snapshot of that region: see the warning for the command."},
+	{estimate.ReasonRegion, "No price snapshot of the resource region",
+		"costgate embeds every region of the public Price List; pass --pricing with a snapshot of this one (see the warning)."},
 	{estimate.ReasonPrice, "Price missing in the snapshot",
 		"The formula needs a price key the snapshot does not have."},
 	{estimate.ReasonConfig, "Configuration not modeled or unknown at plan time",

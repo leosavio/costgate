@@ -13,7 +13,7 @@ Projeção do custo mensal da AWS de um `terraform plan` (ou `tofu plan`), **ant
 recurso, com gate de PR: sai com código distinto quando o delta passa do teto ou quando aparece
 recurso sem preço conhecido. Binário único em Go, offline, sem credencial AWS e sem SaaS.
 
-- Preços vêm de um **snapshot versionado** da [AWS Price List Bulk API](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/price-changes.html) pública, embutido no binário. Mudança de preço entra por PR, com diff auditável.
+- Preços vêm de **snapshots versionados** da [AWS Price List Bulk API](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/price-changes.html) pública, um por região para as 36 regiões (comerciais e GovCloud), embutidos no binário. Cada recurso é precificado na sua região. Mudança de preço entra por PR, com diff auditável.
 - **Fail-closed**: recurso criado ou alterado que a ferramenta não sabe precificar falha o check (exit 2). Nenhum recurso desconhecido vira "US$ 0" em silêncio.
 - **Determinístico**: mesma entrada, mesma saída byte a byte, em arm64 e amd64 (aritmética decimal exata com `math/big`).
 - Saída em Markdown (comentário de PR), JSON e JSON Lines. Cada linha de custo traz as chaves da
@@ -31,7 +31,7 @@ flowchart LR
   subgraph prices["Preços: toda semana, neste repositório"]
     direction TB
     api["AWS Price List Bulk API<br/>arquivos públicos, sem credencial"] --> refresh["costgate pricing refresh"]
-    refresh --> snap["pricing/us-east-1.json, us-west-2.json<br/>schema_version 2, sha256"]
+    refresh --> snap["pricing/&lt;região&gt;.json.gz, 36 regiões<br/>schema_version 2, sha256"]
     snap --> pr["pull request aberto pelo<br/>refresh-pricing.yml, revisado"]
     pr --> bin["release do costgate<br/>snapshot embutido no binário"]
   end
@@ -138,8 +138,8 @@ costgate diff --plan - --format json < plan.json
 | `--usage` | nenhum | arquivo de premissas de uso (abaixo) |
 | `--max-monthly-delta` | sem teto | exit 1 se `depois − antes` > valor (USD/mês) |
 | `--max-monthly-total` | sem teto | exit 1 se o total depois da mudança > valor; com recurso não precificado, exit 2 |
-| `--region` | `us-east-1` | região dos preços; os snapshots de `us-east-1` e `us-west-2` vêm embutidos ([Regiões](#regiões)) |
-| `--pricing` | embutido | outro snapshot (gerado por `pricing refresh`) |
+| `--region` | a única região que o plan cita, senão `us-east-1` | região dos recursos cuja região o plan não informa; os demais são precificados na própria região, as 36 embutidas ([Regiões](#regiões)) |
+| `--pricing` | embutido | arquivo de snapshot (`.json` ou `.json.gz`, gerado por `pricing refresh`) usado no lugar do embutido da sua região; repetível |
 | `--ignore-provider` | nenhum | providers separados por vírgula (`helm,kubectl,kubernetes`) deixados fora da estimativa e do gate, e listados como ignorados ([Providers que não são AWS](#providers-que-não-são-aws)) |
 | `--format` | `markdown` | `markdown` ou `json` no stdout |
 | `--markdown-out`, `--json-out` | — | grava também em arquivo |
@@ -158,31 +158,43 @@ não é positivo. A liberação por label (`cost-approved`) é do consumidor; a 
 código. Job de exemplo: [docs/integration/github-actions.md](docs/integration/github-actions.md).
 
 Cada lado não precificado traz um código de motivo no relatório JSON (`unpriced_reason`):
-`provider` (não é o provider AWS), `type` (tipo AWS fora do mapa de preços), `region` (recurso em
-outra região que a do snapshot), `config` (configuração não modelada, ou valor desconhecido no
-plan) ou `price` (o snapshot não tem preço para a chave, como um tipo de instância que ele não
-lista).
+`provider` (não é o provider AWS), `type` (tipo AWS fora do mapa de preços), `region` (o costgate
+não tem snapshot de preços da região do recurso), `config` (configuração não modelada, ou valor
+desconhecido no plan) ou `price` (o snapshot não tem preço para a chave, como um tipo de instância
+que ele não lista, ou um produto que a AWS não vende naquela região).
 
 ### Regiões
 
-Um snapshot tem os preços de uma região, então o costgate precisa da região de cada recurso. Ele
-usa a primeira fonte que responder:
+O binário embute um snapshot de preços de toda região da AWS Price List pública: as 34 regiões
+comerciais e as 2 do GovCloud (`costgate pricing regions` lista, 1,8 MB de gzip no total). Cada
+recurso é precificado com o snapshot da sua região, então um plan que abrange várias regiões (um
+recurso ACM ou KMS em us-east-1 para o CloudFront, a aplicação em sa-east-1) sai certo sem flag.
+O costgate usa a primeira fonte que responder:
 
 1. o atributo `region` do recurso (o AWS provider 6.x o adiciona a todo recurso);
-2. a região da configuração de provider do recurso, quando o plan a traz como constante
-   (`configuration.provider_config[...].expressions.region.constant_value`, aliases incluídos);
+2. a região da configuração de provider do recurso, quando o plan a informa: uma constante
+   (`configuration.provider_config[...].expressions.region.constant_value`, aliases incluídos) ou
+   uma variável do módulo raiz sozinha (`region = var.region`, cujo valor está em `variables` no
+   plan);
 3. a região do ARN do recurso (`arn:<partição>:<serviço>:<região>:...`; serviços globais como IAM
    ou S3 têm a região vazia e são ignorados);
 4. a região que todos os outros recursos da mesma configuração de provider indicam pelas fontes 1
    ou 3, quando concordam. Cobre um recurso sem ARN (um NAT gateway) numa configuração com
-   `region = var.region` ou `local.region`, que o plan não resolve.
+   `region = local.region` ou variável de módulo, que o plan não resolve;
+5. para o lado depois de uma mudança, a região do lado antes.
 
-Recurso encontrado em outra região que a de `--region` fica **não precificado** com motivo
-`region` (exit 2 se criado ou alterado, só relatado em `no-op` e `delete`), em vez de ser
-precificado com os SKUs da região errada. Quando uma configuração de provider do plan implanta em
-outra região, o Markdown, o JSON (`warnings`) e o JSON Lines (`kind: costgate.warning`) começam
-com um aviso `region_mismatch` que diz a correção: `--region us-west-2` com o snapshot embutido, ou
-`pricing refresh --region <r>` e `--pricing` para uma região que não vem embutida.
+Recurso sem nenhuma dessas fontes (recurso novo, região do provider vinda de `AWS_REGION`) é
+precificado na região padrão: `--region` quando informado, senão a região do único arquivo
+`--pricing`, senão a única região que o plan cita, senão `us-east-1`. Quando quem chamou não
+escolheu a região, os relatórios começam com um aviso `region_assumed` que conta esses recursos e
+diz a região usada.
+
+As regiões da China (`cn-north-1`, `cn-northwest-1`) têm endpoint próprio da Price List, preços em
+CNY, e não vêm embutidas; Local Zones e Wavelength Zones são precificadas como a região-mãe.
+Recurso numa região sem snapshot fica **não precificado** com motivo `region` (exit 2 se criado ou
+alterado, só relatado em `no-op` e `delete`), e o Markdown, o JSON (`warnings`) e o JSON Lines
+(`kind: costgate.warning`) começam com um aviso `region_mismatch` que diz a correção: `--pricing`
+com um snapshot daquela região.
 
 ### Providers que não são AWS
 
@@ -230,7 +242,9 @@ listada no relatório.
 
 ## Recursos cobertos (snapshot us-east-1 de 2026-11-20)
 
-O snapshot us-west-2 tem os mesmos SKUs, com o prefixo `USW2-` no usage type.
+As outras regiões têm as mesmas chaves, com preços e prefixo de usage type próprios (`USW2-`,
+`EU-`, `SAE1-`...). Produto que a AWS não vende numa região não tem preço lá: o recurso fica não
+precificado com motivo `price`.
 
 | Tipo Terraform | Fórmula | SKU (usage type, operação) | Preço |
 |---|---|---|---|
@@ -370,8 +384,19 @@ relatório sem eles é byte a byte o da 0.2.0:
 | Campo | Significado |
 |---|---|
 | `resources[].before.unpriced_reason`, `resources[].after.unpriced_reason` | `provider`, `type`, `region`, `config` ou `price` ([Uso](#uso)) |
-| `warnings[]` | `{code, message, fix}`; código `region_mismatch` ([Regiões](#regiões)) |
+| `warnings[]` | `{code, message, fix}`; códigos `region_mismatch` e `region_assumed` ([Regiões](#regiões)) |
 | `ignored_providers`, `ignored[]` | com `--ignore-provider`: a lista passada, e `{address, type, provider, action}` de cada recurso deixado de fora |
+
+Campos da precificação por região (não lançados), sempre presentes:
+
+| Campo | Significado |
+|---|---|
+| `region` | a região padrão: a dos recursos cuja região o plan não informa ([Regiões](#regiões)); `pricing` descreve o snapshot dela |
+| `snapshots[]` | `{region, as_of, sha256, resources}` de cada snapshot que precificou algum recurso, em ordem de região |
+| `resources[].region` | a região em que o recurso é precificado; `region_assumed: true` quando o plan não a informa |
+
+No JSON Lines, `region`, `pricing_as_of` e `pricing_sha256` de uma linha de custo são os do
+snapshot que a precificou.
 
 ### JSON Lines
 
@@ -404,12 +429,12 @@ para auditar um plan grande: um arquivo que se abre no navegador, sem servidor e
 | Seção | O que mostra |
 |---|---|
 | Cabeçalho e gate | status e exit code, totais antes, depois e delta, cada teto com o resultado, os motivos do exit code, região, `as_of` e sha256 do snapshot, versão do costgate |
-| Avisos | cada item de `warnings[]` do relatório JSON (`region_mismatch`) com a correção, acima de tudo; some quando não há aviso |
+| Avisos | cada item de `warnings[]` do relatório JSON (`region_mismatch`, `region_assumed`) com a correção, acima de tudo; some quando não há aviso |
 | Custo por módulo e por tipo | barras do custo mensal depois da mudança, ou do delta, por módulo (prefixo do endereço: `module.net`, `module.app["a"].module.db`, `(root)`) e por tipo de recurso; o clique filtra a tabela |
 | Recursos | filtro por texto (endereço, tipo, SKU, usage type, rate code), ação, alterados, que bloqueiam, não precificados ou com premissa faltando; a linha abre as linhas de custo com fórmula, `billing_rule`, SKU, usage type, rate code e descrição da fatura, de cada lado |
 | Recursos não precificados | agrupados por `unpriced_reason` (`provider`, `type`, `region`, `price`, `config`), cada um marcado como bloqueia ou não bloqueia o gate |
 | Premissas de uso | linhas cuja quantidade é premissa: as que faltam (contadas como 0, com o custo de uma unidade) e as declaradas (com o valor no total) |
-| Região de preço | a região precificada, a região do snapshot, os avisos de região e todo recurso não precificado por estar em outra região |
+| Regiões de preço | a região padrão e como foi escolhida, cada snapshot usado com data, sha256 e número de recursos, os avisos de região e todo recurso não precificado por falta de snapshot; com várias regiões, a tabela diz a região de cada recurso |
 | Providers ignorados | com `--ignore-provider`: os providers passados e cada recurso deixado de fora (endereço, tipo, provider, ação) |
 | Exportar | as linhas de custo dos recursos filtrados em CSV ou JSON Lines, baixadas pela própria página; mesmos campos e valores do `--json-lines` |
 
@@ -431,19 +456,27 @@ das outras saídas:
 ## Atualizar preços
 
 ```sh
-costgate pricing refresh --region us-west-2 --out pricing/us-west-2.json   # HTTP público, sem credencial
-costgate pricing verify                                                     # todo snapshot embutido
-costgate pricing verify --pricing pricing/us-west-2.json                    # um arquivo
+costgate pricing regions                                                          # toda região suportada, embutida ou não
+costgate pricing refresh --region sa-east-1 --out sa-east-1.json.gz               # HTTP público, sem credencial
+costgate pricing verify                                                           # todo snapshot embutido
+costgate pricing verify --pricing sa-east-1.json.gz                               # um arquivo
+bash scripts/refresh-all.sh                                                       # regrava pricing/*.json.gz, 3 regiões por vez
 ```
 
 O refresh lê `offers/v1.0/aws/index.json`, baixa o CSV de cada serviço mapeado (o do EC2 tem
-~300 MB e é lido em streaming) e grava só os SKUs das regras de
+~300 MB em us-east-1 e é lido em streaming) e grava só os SKUs das regras de
 [`internal/catalog/rules.go`](internal/catalog/rules.go), com `schema_version`, versão e data de
-cada offer file e `sha256`. Regra que não casa nenhum SKU, ou que casa dois SKUs com preços
-diferentes, falha o refresh. Ele conhece os prefixos de usage type de us-east-1, us-east-2,
-us-west-1 e us-west-2; o binário embute os snapshots de us-east-1 e us-west-2.
+cada offer file e `sha256`. Dois SKUs com preços diferentes para uma regra falham o refresh. Regra
+sem preço numa região (produto que a AWS não vende lá) é avisada no stderr e suas chaves ficam de
+fora, então um recurso que precisa dela fica não precificado com motivo `price`; `--strict` torna
+isso um erro, e o refresh semanal roda us-east-1 com `--strict` para pegar mudança de formato da
+offer file. O snapshot é gravado em gzip quando `--out` termina em `.gz`; o mesmo snapshot sempre
+gera os mesmos bytes (sem nome nem hora no cabeçalho do gzip). O prefixo de usage type de cada
+região (`USE1-`, `EU-` para eu-west-1, `UGW1-` para us-gov-west-1...) está em `rules.go`.
 
-O workflow `refresh-pricing.yml` roda toda segunda, atualiza todo snapshot embutido e abre PR só
+O workflow `refresh-pricing.yml` roda toda segunda, atualiza toda região com
+[`scripts/refresh-all.sh`](scripts/refresh-all.sh) (que mantém o arquivo da região cujos preços não
+mudaram) e abre PR só
 quando algum preço mudou: [`scripts/pricing-diff.sh`](scripts/pricing-diff.sh) compara os mapas
 `prices` com a `main`, então um refresh que só muda `as_of`, `sha256` ou as versões das offer files
 não abre nada (mudança de regra aparece como chave adicionada ou removida). Todo refresh usa uma
@@ -504,11 +537,11 @@ separado (o único com `actions: write`) o apaga.
   é não precificado.
 - Valores por recurso são arredondados para exibição; os totais usam a soma exata, então
   `depois − antes` de uma linha pode diferir 0,01 da coluna Delta.
-- us-east-1 e us-west-2 vêm embutidos; outras regiões precisam de `pricing refresh` (só us-east-2 e
-  us-west-1) e `--pricing`. Um run precifica uma região: plan que abrange várias regiões precisa de
-  um run por região, e cada run mostra os recursos das outras regiões como
-  `unpriced_reason: region` (exit 2 quando são criados ou alterados); combine os runs, por exemplo
-  filtrando por `unpriced_reason`.
+- A precificação é por região: recurso numa Local Zone ou Wavelength Zone recebe o preço da
+  região-mãe, que pode ser menor que o da zona. As regiões da China não vêm embutidas (outro
+  endpoint da Price List, preços em CNY).
+- Recurso cuja região o plan não informa (recurso novo com a região do provider vinda de
+  `AWS_REGION`) é precificado na região padrão e contado no aviso `region_assumed`.
 
 ## Desenvolvimento
 

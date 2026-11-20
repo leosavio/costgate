@@ -73,6 +73,14 @@
       }
     ]
   },
+  "snapshots": [
+    {
+      "region": "us-east-1",
+      "as_of": "2026-11-11T15:35:57Z",
+      "sha256": "15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744",
+      "resources": 1
+    }
+  ],
   "totals": {
     "monthly_before": 0.0000,
     "monthly_after": 3.6500,
@@ -113,7 +121,9 @@
         ]
       },
       "delta": 3.6500,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1",
+      "region_assumed": true
     },
     {
       "address": "aws_lb.legacy",
@@ -133,7 +143,9 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1",
+      "region_assumed": true
     },
     {
       "address": "random_password.grafana",
@@ -146,7 +158,9 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1",
+      "region_assumed": true
     }
   ],
   "usage_not_declared": [],

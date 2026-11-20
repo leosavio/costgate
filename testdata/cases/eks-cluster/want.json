@@ -73,6 +73,14 @@
       }
     ]
   },
+  "snapshots": [
+    {
+      "region": "us-east-1",
+      "as_of": "2026-11-11T15:35:57Z",
+      "sha256": "15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744",
+      "resources": 3
+    }
+  ],
   "totals": {
     "monthly_before": 511.0000,
     "monthly_after": 614.3790,
@@ -165,7 +173,8 @@
         ]
       },
       "delta": 30.3790,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_eks_cluster.legacy",
@@ -243,7 +252,8 @@
         ]
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "module.eks.aws_eks_cluster.this[0]",
@@ -288,7 +298,8 @@
         ]
       },
       "delta": 73.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     }
   ],
   "usage_not_declared": [

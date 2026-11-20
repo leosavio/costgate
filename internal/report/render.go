@@ -31,8 +31,15 @@ type Input struct {
 	Warnings []Warning
 }
 
-// WarningRegionMismatch is the code of the warning RegionWarnings builds.
-const WarningRegionMismatch = "region_mismatch"
+// Codes of the warnings RegionWarnings builds.
+const (
+	// WarningRegionMismatch: the plan deploys to a region costgate has no
+	// price snapshot of.
+	WarningRegionMismatch = "region_mismatch"
+	// WarningRegionAssumed: resources whose region the plan does not state
+	// were priced in a region the caller did not choose.
+	WarningRegionAssumed = "region_assumed"
+)
 
 // Warning is a top-level notice: part of the estimate is probably not what
 // the caller wants, and Fix says how to correct it.
@@ -43,28 +50,40 @@ type Warning struct {
 }
 
 // RegionWarnings builds one warning per region the plan deploys to that
-// differs from the priced region. embedded reports whether the binary
-// carries a snapshot of a region.
-func RegionWarnings(res *estimate.Result, embedded func(region string) bool) []Warning {
+// costgate has no price snapshot of, and one when resources whose region
+// the plan does not state were priced in a region the caller did not choose.
+func RegionWarnings(res *estimate.Result) []Warning {
 	var out []Warning
 	for _, m := range res.RegionMismatches {
 		from := ""
 		if m.Inferred {
 			from = " (region taken from the region attribute or ARNs of its resources)"
 		}
-		msg := fmt.Sprintf("provider configuration %s deploys to %s%s, but prices are for %s; %s in %s left unpriced (reason region)",
-			strings.Join(m.Providers, ", "), m.Region, from, res.Region,
+		msg := fmt.Sprintf("provider configuration %s deploys to %s%s, and costgate has no price snapshot of %s; %s in %s left unpriced (reason region)",
+			strings.Join(m.Providers, ", "), m.Region, from, m.Region,
 			plural(m.Resources, "resource", "resources"), m.Region)
-		var fix string
-		switch {
-		case embedded(m.Region):
-			fix = fmt.Sprintf("rerun with --region %s (embedded snapshot)", m.Region)
-		case catalog.RegionSupported(m.Region):
-			fix = fmt.Sprintf("run 'costgate pricing refresh --region %[1]s --out %[1]s.json', then rerun with --region %[1]s --pricing %[1]s.json", m.Region)
-		default:
-			fix = fmt.Sprintf("costgate has no snapshot of %[1]s and pricing refresh does not support it yet; price this plan with --region %[1]s --pricing <snapshot of %[1]s>", m.Region)
+		fix := fmt.Sprintf("run 'costgate pricing refresh --region %[1]s --out %[1]s.json.gz', then rerun with --pricing %[1]s.json.gz", m.Region)
+		if !catalog.RegionSupported(m.Region) {
+			fix = fmt.Sprintf("the public AWS Price List of this endpoint has no region %[1]s (China regions have their own); rerun with --pricing <snapshot of %[1]s>", m.Region)
 		}
 		out = append(out, Warning{Code: WarningRegionMismatch, Message: msg, Fix: fix})
+	}
+	if res.Assumed > 0 && res.RegionFrom != estimate.RegionFromFlag {
+		why := "the only region the plan names"
+		if res.RegionFrom == estimate.RegionFromDefault {
+			switch len(res.PlanRegions) {
+			case 0:
+				why = "the default, because the plan names no region"
+			case 1:
+				why = "the default, because costgate has no price snapshot of " + res.PlanRegions[0] + ", the only region the plan names"
+			default:
+				why = "the default, because the plan names several regions (" + strings.Join(res.PlanRegions, ", ") + ")"
+			}
+		}
+		out = append(out, Warning{Code: WarningRegionAssumed,
+			Message: fmt.Sprintf("%s no region in the plan (no region attribute, no region in the provider configuration, no ARN yet); priced in %s, %s",
+				plural(res.Assumed, "resource states", "resources state"), res.Region, why),
+			Fix: "rerun with --region <region> if they deploy elsewhere"})
 	}
 	return out
 }
@@ -166,6 +185,7 @@ func Markdown(in Input) string {
 		}
 	}
 
+	multi := multiRegion(res)
 	if len(changed) > 0 {
 		w("#### Changed resources\n\n| Resource | Action | Before | After | Delta | Breakdown |\n|---|---|---:|---:|---:|---|\n")
 		for _, r := range changed {
@@ -173,7 +193,7 @@ func Markdown(in Input) string {
 			if r.Unpriced() != "" {
 				delta = "?"
 			}
-			w("| `%s` | %s | %s | %s | %s | %s |\n", r.Address, r.Action, cell(&r.Before), cell(&r.After), delta, escape(breakdown(r)))
+			w("| %s | %s | %s | %s | %s | %s |\n", resourceCell(r, multi), r.Action, cell(&r.Before), cell(&r.After), delta, escape(breakdown(r)))
 		}
 		w("\n")
 		billingDetails(w, changed)
@@ -224,19 +244,48 @@ func Markdown(in Input) string {
 	if len(unchanged) > 0 {
 		w("<details><summary>%s</summary>\n\n| Resource | Monthly |\n|---|---:|\n", plural(len(unchanged), "unchanged priced resource", "unchanged priced resources"))
 		for _, r := range unchanged {
-			w("| `%s` | %s |\n", r.Address, usd(r.After.Monthly))
+			w("| %s | %s |\n", resourceCell(r, multi), usd(r.After.Monthly))
 		}
 		w("\n</details>\n\n")
 	}
 
-	p := in.Pricing
 	ignored := ""
 	if len(res.IgnoredProviders) > 0 {
 		ignored = fmt.Sprintf(" · `--ignore-provider %s`: %s left out of the gate", strings.Join(res.IgnoredProviders, ","), plural(len(res.Ignored), "resource", "resources"))
 	}
-	w("<sub>costgate %s · AWS Price List Bulk API snapshot `%s` as of %s (sha256 `%s`)%s · %s</sub>\n",
-		in.Version, p.Region, p.AsOf, shortSHA(p.SHA256), ignored, disclaimer)
+	w("<sub>costgate %s · %s%s · %s</sub>\n", in.Version, snapshotsText(in, "`"), ignored, disclaimer)
 	return b.String()
+}
+
+// snapshotsText names the snapshots of the run for the footers: the one of
+// the default region alone, or every one used. q quotes code spans.
+func snapshotsText(in Input, q string) string {
+	uses := in.Result.Snapshots
+	if len(uses) <= 1 {
+		p := in.Pricing
+		if len(uses) == 1 {
+			p = uses[0].Snapshot
+		}
+		return fmt.Sprintf("AWS Price List Bulk API snapshot %[1]s%[2]s%[1]s as of %[3]s (sha256 %[1]s%[4]s%[1]s)", q, p.Region, p.AsOf, shortSHA(p.SHA256))
+	}
+	parts := make([]string, 0, len(uses))
+	for _, u := range uses {
+		parts = append(parts, fmt.Sprintf("%[1]s%[2]s%[1]s as of %[3]s (sha256 %[1]s%[4]s%[1]s)", q, u.Region, u.Snapshot.AsOf, shortSHA(u.Snapshot.SHA256)))
+	}
+	return "AWS Price List Bulk API snapshots " + strings.Join(parts, ", ")
+}
+
+// multiRegion reports whether the resources of the report are priced in more
+// than one region, so the tables name the region of each.
+func multiRegion(res *estimate.Result) bool { return len(res.Snapshots) > 1 }
+
+// resourceCell is the Resource column: the address, and the region when the
+// report spans several.
+func resourceCell(r estimate.Resource, multi bool) string {
+	if multi {
+		return fmt.Sprintf("`%s` · %s", r.Address, r.Region)
+	}
+	return "`" + r.Address + "`"
 }
 
 // disclaimer is the scope of the prices, in the footer of every report.
@@ -362,6 +411,18 @@ type jsonResource struct {
 	After    *jsonSide   `json:"after"`
 	Delta    json.Number `json:"delta"`
 	Blocking bool        `json:"blocking"`
+	// Region is where the resource is priced; RegionAssumed is true when
+	// the plan does not state it and the report region was used.
+	Region        string `json:"region"`
+	RegionAssumed bool   `json:"region_assumed,omitempty"`
+}
+
+// jsonSnapshot is a price snapshot the run used.
+type jsonSnapshot struct {
+	Region    string `json:"region"`
+	AsOf      string `json:"as_of"`
+	SHA256    string `json:"sha256"`
+	Resources int    `json:"resources"`
 }
 
 type jsonReport struct {
@@ -375,7 +436,9 @@ type jsonReport struct {
 		SHA256  string           `json:"sha256"`
 		Sources []catalog.Source `json:"sources"`
 	} `json:"pricing"`
-	Totals struct {
+	// Snapshots lists every snapshot used, the one of region included.
+	Snapshots []jsonSnapshot `json:"snapshots"`
+	Totals    struct {
 		Before json.Number `json:"monthly_before"`
 		After  json.Number `json:"monthly_after"`
 		Delta  json.Number `json:"monthly_delta"`
@@ -463,7 +526,12 @@ func buildReport(in Input) jsonReport {
 		r.Resources = append(r.Resources, jsonResource{
 			Address: x.Address, Type: x.Type, Action: x.Action, ZeroCost: x.ZeroCost,
 			Before: toJSONSide(x.Before), After: toJSONSide(x.After), Delta: num(x.Delta), Blocking: x.Blocking,
+			Region: x.Region, RegionAssumed: x.RegionAssumed,
 		})
+	}
+	r.Snapshots = []jsonSnapshot{}
+	for _, u := range res.Snapshots {
+		r.Snapshots = append(r.Snapshots, jsonSnapshot{Region: u.Region, AsOf: u.Snapshot.AsOf, SHA256: u.Snapshot.SHA256, Resources: u.Resources})
 	}
 	r.Undeclared = res.Undeclared()
 	if r.Undeclared == nil {
@@ -574,10 +642,15 @@ func lineDocs(in Input, r estimate.Resource) []jsonLineDoc {
 		if !sd.side.Exists {
 			continue
 		}
+		// A line was priced with the snapshot of the region of its side.
+		snap := in.Result.Snapshot(sd.side.Region)
+		if snap == nil {
+			snap = in.Pricing
+		}
 		for _, l := range sd.side.Lines {
 			out = append(out, jsonLineDoc{
 				SchemaVersion: JSONSchemaVersion, Kind: LineKind, Tool: "costgate", Version: in.Version,
-				Region: in.Result.Region, Currency: "USD", PricingAsOf: in.Pricing.AsOf, PricingSHA256: in.Pricing.SHA256,
+				Region: snap.Region, Currency: "USD", PricingAsOf: snap.AsOf, PricingSHA256: snap.SHA256,
 				Address: r.Address, Type: r.Type, Action: string(r.Action), Side: sd.name, jsonLine: toJSONLine(l),
 			})
 		}

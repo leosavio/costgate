@@ -27,12 +27,57 @@ func fixtureSnapshot(t *testing.T) string {
 	t.Cleanup(srv.Close)
 	out := filepath.Join(t.TempDir(), "us-east-1.json")
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"pricing", "refresh", "--base-url", srv.URL, "--out", out},
+	code := Run([]string{"pricing", "refresh", "--strict", "--base-url", srv.URL, "--out", out},
 		Env{Version: "test", Stdout: &stdout, Stderr: &stderr, HTTPClient: srv.Client()})
 	if code != 0 {
 		t.Fatalf("refresh exit %d: %s", code, stderr.String())
 	}
 	return out
+}
+
+// TestRefreshGzipIsDeterministic: the .json.gz form is the JSON form,
+// compressed, and the same bytes on every run.
+func TestRefreshGzipIsDeterministic(t *testing.T) {
+	srv := httptest.NewServer(http.FileServer(http.Dir(filepath.Join(root, "offers"))))
+	t.Cleanup(srv.Close)
+	dir := t.TempDir()
+	var outs [][]byte
+	for _, name := range []string{"a.json.gz", "b.json.gz"} {
+		var stdout, stderr bytes.Buffer
+		if code := Run([]string{"pricing", "refresh", "--base-url", srv.URL, "--out", filepath.Join(dir, name)},
+			Env{Version: "test", Stdout: &stdout, Stderr: &stderr, HTTPClient: srv.Client()}); code != 0 {
+			t.Fatalf("refresh exit %d: %s", code, stderr.String())
+		}
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		outs = append(outs, data)
+	}
+	if !bytes.Equal(outs[0], outs[1]) || outs[0][0] != 0x1f || outs[0][1] != 0x8b {
+		t.Fatal("gzip snapshot differs between runs or is not gzip")
+	}
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"pricing", "verify", "--pricing", filepath.Join(dir, "a.json.gz")}, Env{Version: "test", Stdout: &stdout, Stderr: &stderr}); code != 0 {
+		t.Fatalf("verify gzip: exit %d: %s", code, stderr.String())
+	}
+	golden, err := os.ReadFile(filepath.Join(root, "pricing.golden.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), "sha256 "+jsonField(t, golden, "sha256")) {
+		t.Errorf("gzip snapshot has another digest than the JSON golden:\n%s", stdout.String())
+	}
+}
+
+func jsonField(t *testing.T, data []byte, key string) string {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := m[key].(string)
+	return s
 }
 
 func golden(t *testing.T, path string, got []byte) {
@@ -65,9 +110,21 @@ type caseOutput struct {
 	code             int
 }
 
+// runCase runs a golden case with only the us-east-1 fixture snapshot.
 func runCase(t *testing.T, dir, snapshot string) caseOutput {
 	t.Helper()
-	args := []string{"diff", "--plan", filepath.Join(dir, "plan.json"), "--pricing", snapshot}
+	return runCaseEnv(t, dir, snapshot, Env{Version: "test", Embedded: func(string) ([]byte, bool) { return nil, false }})
+}
+
+// runCaseEnv runs a golden case with env's built-in snapshots. The case
+// passes --pricing snapshot unless its directory has a file named
+// "embedded": then the plan alone picks the regions, as without flags.
+func runCaseEnv(t *testing.T, dir, snapshot string, env Env) caseOutput {
+	t.Helper()
+	args := []string{"diff", "--plan", filepath.Join(dir, "plan.json")}
+	if _, err := os.Stat(filepath.Join(dir, "embedded")); err != nil {
+		args = append(args, "--pricing", snapshot)
+	}
 	if _, err := os.Stat(filepath.Join(dir, "usage.json")); err == nil {
 		args = append(args, "--usage", filepath.Join(dir, "usage.json"))
 	}
@@ -80,7 +137,8 @@ func runCase(t *testing.T, dir, snapshot string) caseOutput {
 	htmlPath := filepath.Join(tmp, "report.html")
 	args = append(args, "--json-out", jsonPath, "--json-lines", linesPath, "--html-out", htmlPath)
 	var stdout, stderr bytes.Buffer
-	out := caseOutput{code: Run(args, Env{Version: "test", Stdout: &stdout, Stderr: &stderr})}
+	env.Stdout, env.Stderr = &stdout, &stderr
+	out := caseOutput{code: Run(args, env)}
 	if stderr.Len() > 0 {
 		t.Fatalf("stderr: %s", stderr.String())
 	}
@@ -95,14 +153,15 @@ func runCase(t *testing.T, dir, snapshot string) caseOutput {
 }
 
 func TestGoldenCases(t *testing.T) {
-	snapshot := fixtureSnapshot(t)
+	snapshot, west := fixtureSnapshots(t)
+	env := fixtureEnv(t, snapshot, west)
 	dirs, err := filepath.Glob(filepath.Join(root, "cases", "*"))
 	if err != nil || len(dirs) == 0 {
 		t.Fatalf("no cases: %v", err)
 	}
 	for _, dir := range dirs {
 		t.Run(filepath.Base(dir), func(t *testing.T) {
-			o := runCase(t, dir, snapshot)
+			o := runCaseEnv(t, dir, snapshot, env)
 			golden(t, filepath.Join(dir, "want.md"), o.md)
 			golden(t, filepath.Join(dir, "want.json"), o.js)
 			golden(t, filepath.Join(dir, "want.jsonl"), o.jl)
@@ -112,7 +171,7 @@ func TestGoldenCases(t *testing.T) {
 			checkHTML(t, o.html, o.js, o.jl)
 
 			// Determinism: a second run produces the same bytes.
-			o2 := runCase(t, dir, snapshot)
+			o2 := runCaseEnv(t, dir, snapshot, env)
 			if !bytes.Equal(o.md, o2.md) || !bytes.Equal(o.js, o2.js) || !bytes.Equal(o.jl, o2.jl) ||
 				!bytes.Equal(o.html, o2.html) || o.code != o2.code {
 				t.Error("second run differs from the first")
@@ -444,9 +503,10 @@ func TestUsageErrorsExit3(t *testing.T) {
 		"bad usage":        {"diff", "--plan", plan, "--usage", badUsage},
 		"state not plan":   {"diff", "--plan", statePath},
 		"missing file":     {"diff", "--plan", filepath.Join(tmp, "nope.json")},
-		"not embedded":     {"diff", "--plan", plan, "--region", "us-east-2"},
-		"snapshot region":  {"diff", "--plan", plan, "--region", "us-west-2", "--pricing", filepath.Join(root, "pricing.golden.json")},
-		"refresh region":   {"pricing", "refresh", "--region", "sa-east-1", "--out", filepath.Join(tmp, "x.json")},
+		"no region prices": {"diff", "--plan", plan, "--region", "cn-north-1"},
+		"two snapshots":    {"diff", "--plan", plan, "--pricing", filepath.Join(root, "pricing.golden.json"), "--pricing", filepath.Join(root, "pricing.golden.json")},
+		"refresh region":   {"pricing", "refresh", "--region", "cn-north-1", "--out", filepath.Join(tmp, "x.json")},
+		"regions argument": {"pricing", "regions", "extra"},
 		"ignore aws":       {"diff", "--plan", plan, "--ignore-provider", "helm,aws"},
 		"ignore hc aws":    {"diff", "--plan", plan, "--ignore-provider", "hashicorp/aws"},
 		"ignore empty":     {"diff", "--plan", plan, "--ignore-provider", "helm,"},
@@ -484,7 +544,10 @@ func TestEmbeddedSnapshotVerifies(t *testing.T) {
 	if code := Run([]string{"pricing", "verify"}, Env{Version: "test", Stdout: &stdout, Stderr: &stderr}); code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr.String())
 	}
-	for _, r := range []string{"us-east-1", "us-west-2"} {
+	if n := strings.Count(stdout.String(), "\nok ") + 1; !strings.HasPrefix(stdout.String(), "ok ") || n != 36 {
+		t.Errorf("verify checked %d snapshots, want 36:\n%s", n, stdout.String())
+	}
+	for _, r := range []string{"us-east-1", "us-west-2", "eu-west-1", "us-gov-west-1", "ap-southeast-7"} {
 		if !strings.Contains(stdout.String(), "ok "+r+": ") {
 			t.Errorf("verify did not check %s:\n%s", r, stdout.String())
 		}
@@ -500,17 +563,40 @@ func TestEmbeddedSnapshotVerifies(t *testing.T) {
 	}
 }
 
-// --region us-west-2 works without --pricing: the snapshot is embedded.
-func TestEmbeddedUSWest2(t *testing.T) {
+// The workshop plan (provider in us-west-2) needs no flag: the plan names
+// the region and its snapshot is embedded.
+func TestEmbeddedRegionFromPlan(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"diff", "--plan", filepath.Join(root, "cases", "region-provider", "plan.json"), "--region", "us-west-2", "--format", "json"},
+	code := Run([]string{"diff", "--plan", filepath.Join(root, "cases", "region-provider", "plan.json"), "--format", "json"},
 		Env{Version: "test", Stdout: &stdout, Stderr: &stderr})
 	if code != 0 && code != 2 {
 		t.Fatalf("exit %d: %s", code, stderr.String())
 	}
 	out := stdout.String()
 	if !strings.Contains(out, `"region": "us-west-2"`) || !strings.Contains(out, `"usage_type": "USW2-PublicIPv4:InUseAddress"`) ||
-		strings.Contains(out, "USE1-") || strings.Contains(out, `"code": "region_mismatch"`) {
-		t.Errorf("us-west-2 run does not price with USW2 keys or still warns:\n%s", out)
+		strings.Contains(out, "USE1-") || strings.Contains(out, `"code": "region_`) {
+		t.Errorf("us-west-2 run does not price with USW2 keys or warns:\n%s", out)
+	}
+	// --region names the region of the resources the plan does not place;
+	// the others stay in their own region.
+	stdout.Reset()
+	code = Run([]string{"diff", "--plan", filepath.Join(root, "cases", "region-provider", "plan.json"), "--region", "us-east-1", "--format", "json"},
+		Env{Version: "test", Stdout: &stdout, Stderr: &stderr})
+	if code != 0 && code != 2 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	if out := stdout.String(); !strings.Contains(out, `"usage_type": "USW2-PublicIPv4:InUseAddress"`) || strings.Contains(out, `"code": "region_`) {
+		t.Errorf("--region us-east-1 run:\n%s", out)
+	}
+}
+
+func TestPricingRegions(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"pricing", "regions"}, Env{Version: "test", Stdout: &stdout, Stderr: &stderr}); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	if len(lines) != 36 || lines[0] != "af-south-1\tembedded" || strings.Contains(stdout.String(), "refresh only") {
+		t.Errorf("pricing regions:\n%s", stdout.String())
 	}
 }

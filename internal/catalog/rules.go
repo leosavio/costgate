@@ -1,6 +1,9 @@
 package catalog
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // Scope of an offer file: one region, or the global file of the service.
 const (
@@ -33,20 +36,75 @@ func (r Rule) String() string {
 	return fmt.Sprintf("%s/%s usagetype=%s operation=%s", r.Service, r.Scope, ut, op)
 }
 
+// regionCodes maps every region of the public Price List (partitions aws and
+// aws-us-gov, Local Zones excluded) to its usage type prefix, as the
+// AmazonVPC regional offer files use it (checked 2026-11-20: one prefix per
+// region). China (aws-cn) has its own Price List endpoint and prices in CNY,
+// so it is not here.
+var regionCodes = map[string]string{
+	"af-south-1":     "AFS1",
+	"ap-east-1":      "APE1",
+	"ap-east-2":      "APE2",
+	"ap-northeast-1": "APN1",
+	"ap-northeast-2": "APN2",
+	"ap-northeast-3": "APN3",
+	"ap-south-1":     "APS3",
+	"ap-south-2":     "APS5",
+	"ap-southeast-1": "APS1",
+	"ap-southeast-2": "APS2",
+	"ap-southeast-3": "APS4",
+	"ap-southeast-4": "APS6",
+	"ap-southeast-5": "APS7",
+	"ap-southeast-6": "APS8",
+	"ap-southeast-7": "APS9",
+	"ca-central-1":   "CAN1",
+	"ca-west-1":      "CAN2",
+	"eu-central-1":   "EUC1",
+	"eu-central-2":   "EUC2",
+	"eu-north-1":     "EUN1",
+	"eu-south-1":     "EUS1",
+	"eu-south-2":     "EUS2",
+	"eu-west-1":      "EU",
+	"eu-west-2":      "EUW2",
+	"eu-west-3":      "EUW3",
+	"il-central-1":   "ILC1",
+	"me-central-1":   "MEC1",
+	"me-south-1":     "MES1",
+	"mx-central-1":   "MXC1",
+	"sa-east-1":      "SAE1",
+	"us-east-1":      "USE1",
+	"us-east-2":      "USE2",
+	"us-gov-east-1":  "UGE1",
+	"us-gov-west-1":  "UGW1",
+	"us-west-1":      "USW1",
+	"us-west-2":      "USW2",
+}
+
 // regionPrefixes lists the usage type prefixes AWS uses for a region. The
 // Price List is not consistent (EC2 in us-east-1 has no prefix, VPC uses
 // "USE1-", KMS uses "us-east-1-"), so every known form is stripped.
-var regionPrefixes = map[string][]string{
-	"us-east-1": {"USE1-", "us-east-1-"},
-	"us-east-2": {"USE2-", "us-east-2-"},
-	"us-west-1": {"USW1-", "us-west-1-"},
-	"us-west-2": {"USW2-", "us-west-2-"},
+func regionPrefixes(region string) ([]string, bool) {
+	code, ok := regionCodes[region]
+	if !ok {
+		return nil, false
+	}
+	return []string{code + "-", region + "-"}, true
 }
 
 // RegionSupported reports whether refresh knows the usage type prefixes of region.
 func RegionSupported(region string) bool {
-	_, ok := regionPrefixes[region]
+	_, ok := regionCodes[region]
 	return ok
+}
+
+// Regions lists the regions refresh supports, sorted.
+func Regions() []string {
+	out := make([]string, 0, len(regionCodes))
+	for r := range regionCodes {
+		out = append(out, r)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func normalizeUsageType(usageType string, prefixes []string) string {

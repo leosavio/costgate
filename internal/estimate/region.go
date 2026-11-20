@@ -20,16 +20,16 @@ const (
 	regionFromSiblings  = "ARNs of other resources of provider configuration"
 )
 
-// RegionMismatch is a provider configuration of the plan whose region is
-// known and differs from the priced region.
+// RegionMismatch groups the provider configurations of the plan that deploy
+// to a region costgate has no price snapshot of.
 type RegionMismatch struct {
 	// Region is where the provider configurations deploy.
 	Region string
 	// Providers are the provider_config_key values, sorted.
 	Providers []string
-	// Inferred is true when no provider configuration has the region as a
-	// constant and it comes from the region attribute or ARNs of its
-	// resources.
+	// Inferred is true when no provider configuration states the region (a
+	// constant or a root variable) and it comes from the region attribute
+	// or ARNs of its resources.
 	Inferred bool
 	// Resources counts the resources left unpriced because they are in
 	// Region (resources with no charge are not counted).
@@ -178,17 +178,24 @@ func (rr *regionResolver) resolve(rc plan.ResourceChange, value any) (string, st
 	return "", ""
 }
 
-// mismatches lists the provider configurations whose region (constant, or
-// learned from their resources) differs from priced. found counts, by
+// mismatches lists the provider configurations whose region (stated, or
+// learned from their resources) has no price snapshot. found counts, by
 // region, the resources left unpriced for being there.
-func (rr *regionResolver) mismatches(priced string, found map[string]int) []RegionMismatch {
+func (rr *regionResolver) mismatches(has func(region string) (bool, error), found map[string]int) ([]RegionMismatch, error) {
 	byRegion := map[string]*RegionMismatch{}
 	for key := range rr.keys {
 		r, constant := rr.plan.ProviderRegion(key)
 		if !constant {
 			r = rr.learned[key]
 		}
-		if r == "" || r == priced {
+		if r == "" {
+			continue
+		}
+		ok, err := has(r)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			continue
 		}
 		m := byRegion[r]
@@ -207,5 +214,5 @@ func (rr *regionResolver) mismatches(priced string, found map[string]int) []Regi
 		out = append(out, *m)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Region < out[j].Region })
-	return out
+	return out, nil
 }

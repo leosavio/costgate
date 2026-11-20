@@ -73,6 +73,14 @@
       }
     ]
   },
+  "snapshots": [
+    {
+      "region": "us-east-1",
+      "as_of": "2026-11-11T15:35:57Z",
+      "sha256": "15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744",
+      "resources": 7
+    }
+  ],
   "totals": {
     "monthly_before": 73.5160,
     "monthly_after": 21.8176,
@@ -133,7 +141,8 @@
         ]
       },
       "delta": 2.4000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_eip.nat",
@@ -161,7 +170,8 @@
       },
       "after": null,
       "delta": -3.6500,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_instance.app",
@@ -238,7 +248,8 @@
         ]
       },
       "delta": -2.0464,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_instance.batch",
@@ -340,7 +351,8 @@
         ]
       },
       "delta": -15.5520,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_kms_key.state",
@@ -388,7 +400,8 @@
         ]
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_nat_gateway.main",
@@ -431,7 +444,8 @@
       },
       "after": null,
       "delta": -32.8500,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_route_table.private",
@@ -447,7 +461,8 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "module.dns.aws_route53_zone.this[\"example.com\"]",
@@ -495,7 +510,8 @@
         ]
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     }
   ],
   "usage_not_declared": [
