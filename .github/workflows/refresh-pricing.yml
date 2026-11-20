@@ -18,7 +18,7 @@ name: refresh-pricing
 # GITHUB_TOKEN triggers workflow runs").
 #
 # dry_run_pr (manual only) proves the PR path without touching main or the
-# real snapshot: it adds a "test_marker" field to the snapshot on a throwaway
+# real snapshots: it adds pricing/test-marker.txt on a throwaway
 # branch, opens a PR labelled pricing-refresh-test, checks that
 # github-actions[bot] authored it and that the ci run waits for approval,
 # then closes the PR and deletes the branch in the same run (also on
@@ -117,7 +117,7 @@ jobs:
           if [ "$DRY_RUN" = true ]; then
             branch="pricing/refresh-test-${RUN_ID}"
             title="test(pricing): dry run of the refresh PR (run ${RUN_ID}), do not merge"
-            body="Opened by refresh-pricing.yml with dry_run_pr=true to prove the PR path. The snapshot carries a synthetic test_marker field. The same run closes this PR and deletes the branch."
+            body="Opened by refresh-pricing.yml with dry_run_pr=true to prove the PR path. It adds pricing/test-marker.txt next to the snapshots, a synthetic change. The same run closes this PR and deletes the branch."
             label_args="--label ${TEST_LABEL}"
             if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then echo "$branch exists"; exit 1; fi
           else
