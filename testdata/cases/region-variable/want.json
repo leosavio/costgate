@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "tool": "costgate",
+  "version": "test",
+  "region": "eu-west-1",
+  "currency": "USD",
+  "pricing": {
+    "as_of": "2026-11-11T15:35:57Z",
+    "sha256": "a69153b222e00e1d026a374c790ed9d190327f26381a828e1a793484eb13c8a8",
+    "sources": [
+      {
+        "service": "AWSCertificateManager",
+        "scope": "region",
+        "version": "20261022154217",
+        "publication_date": "2026-10-22T15:42:17Z",
+        "path": "/offers/v1.0/aws/AWSCertificateManager/20261022154217/eu-west-1/index.csv"
+      },
+      {
+        "service": "AWSCloudTrail",
+        "scope": "region",
+        "version": "20261102172009",
+        "publication_date": "2026-11-02T17:20:09Z",
+        "path": "/offers/v1.0/aws/AWSCloudTrail/20261102172009/eu-west-1/index.csv"
+      },
+      {
+        "service": "AmazonEC2",
+        "scope": "region",
+        "version": "20261029175634",
+        "publication_date": "2026-10-29T17:56:34Z",
+        "path": "/offers/v1.0/aws/AmazonEC2/20261029175634/eu-west-1/index.csv"
+      },
+      {
+        "service": "AmazonEKS",
+        "scope": "region",
+        "version": "20261111153557",
+        "publication_date": "2026-11-11T15:35:57Z",
+        "path": "/offers/v1.0/aws/AmazonEKS/20261111153557/eu-west-1/index.csv"
+      },
+      {
+        "service": "AmazonRoute53",
+        "scope": "global",
+        "version": "20260911124504",
+        "publication_date": "2026-09-11T12:45:04Z",
+        "path": "/offers/v1.0/aws/AmazonRoute53/current/index.csv"
+      },
+      {
+        "service": "AmazonRoute53",
+        "scope": "region",
+        "version": "20260911124504",
+        "publication_date": "2026-09-11T12:45:04Z",
+        "path": "/offers/v1.0/aws/AmazonRoute53/20260911124504/eu-west-1/index.csv"
+      },
+      {
+        "service": "AmazonS3",
+        "scope": "region",
+        "version": "20261015173540",
+        "publication_date": "2026-10-15T17:35:40Z",
+        "path": "/offers/v1.0/aws/AmazonS3/20261015173540/eu-west-1/index.csv"
+      },
+      {
+        "service": "AmazonVPC",
+        "scope": "region",
+        "version": "20261103000947",
+        "publication_date": "2026-11-03T00:09:47Z",
+        "path": "/offers/v1.0/aws/AmazonVPC/20261103000947/eu-west-1/index.csv"
+      },
+      {
+        "service": "awskms",
+        "scope": "region",
+        "version": "20261026201814",
+        "publication_date": "2026-10-26T20:18:14Z",
+        "path": "/offers/v1.0/aws/awskms/20261026201814/eu-west-1/index.csv"
+      }
+    ]
+  },
+  "snapshots": [
+    {
+      "region": "eu-west-1",
+      "as_of": "2026-11-11T15:35:57Z",
+      "sha256": "a69153b222e00e1d026a374c790ed9d190327f26381a828e1a793484eb13c8a8",
+      "resources": 3
+    }
+  ],
+  "totals": {
+    "monthly_before": 0.0000,
+    "monthly_after": 16.1025,
+    "monthly_delta": 16.1025
+  },
+  "ceilings": {
+    "max_monthly_delta": 50.0000,
+    "max_monthly_total": null
+  },
+  "status": "ok",
+  "exit_code": 0,
+  "reasons": [],
+  "incomplete": false,
+  "resources": [
+    {
+      "address": "aws_eip.app",
+      "type": "aws_eip",
+      "action": "create",
+      "zero_cost": false,
+      "before": null,
+      "after": {
+        "monthly": 4.5625,
+        "lines": [
+          {
+            "name": "public IPv4 address",
+            "price_key": "AmazonVPC|PublicIPv4:InUseAddress|",
+            "sku": "4GQUNXTFWVSGPUZK",
+            "usage_type": "EU-PublicIPv4:InUseAddress",
+            "rate_code": "4GQUNXTFWVSGPUZK.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.005 per In-use public IPv4 address per hour",
+            "billing_rule": "fixed_hourly",
+            "unit_price": 0.00625,
+            "quantity": 730,
+            "unit": "h",
+            "monthly": 4.5625,
+            "declared": true
+          }
+        ]
+      },
+      "delta": 4.5625,
+      "blocking": false,
+      "region": "eu-west-1"
+    },
+    {
+      "address": "aws_instance.app",
+      "type": "aws_instance",
+      "action": "create",
+      "zero_cost": false,
+      "before": null,
+      "after": {
+        "monthly": 10.2900,
+        "lines": [
+          {
+            "name": "compute on-demand, Linux t3.micro",
+            "price_key": "AmazonEC2|BoxUsage:t3.micro|RunInstances",
+            "sku": "CRAJUW7BTXFMT2UJ",
+            "usage_type": "EU-BoxUsage:t3.micro",
+            "rate_code": "CRAJUW7BTXFMT2UJ.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.0104 per On Demand Linux t3.micro Instance Hour",
+            "billing_rule": "fixed_hourly",
+            "unit_price": 0.013,
+            "quantity": 730,
+            "unit": "h",
+            "monthly": 9.4900,
+            "declared": true
+          },
+          {
+            "name": "root volume (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp3|",
+            "sku": "JG3KUJMBRGHV3N8G",
+            "usage_type": "EU-EBS:VolumeUsage.gp3",
+            "rate_code": "JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.08 per GB-month of General Purpose (gp3) provisioned storage - EU (Ireland)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 0.1,
+            "quantity": 8,
+            "unit": "GB-month",
+            "monthly": 0.8000,
+            "declared": true
+          }
+        ]
+      },
+      "delta": 10.2900,
+      "blocking": false,
+      "region": "eu-west-1"
+    },
+    {
+      "address": "aws_kms_key.app",
+      "type": "aws_kms_key",
+      "action": "create",
+      "zero_cost": false,
+      "before": null,
+      "after": {
+        "monthly": 1.2500,
+        "lines": [
+          {
+            "name": "customer managed key",
+            "price_key": "awskms|KMS-Keys|",
+            "sku": "U553K98XGDXCYHWS",
+            "usage_type": "eu-west-1-KMS-Keys",
+            "rate_code": "U553K98XGDXCYHWS.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$1 per customer managed KMS key version in EU (Ireland)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 1.25,
+            "quantity": 1,
+            "unit": "key-month",
+            "monthly": 1.2500,
+            "declared": true,
+            "note": "requests not priced"
+          }
+        ]
+      },
+      "delta": 1.2500,
+      "blocking": false,
+      "region": "eu-west-1"
+    }
+  ],
+  "usage_not_declared": []
+}

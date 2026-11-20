@@ -1,0 +1,142 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.13.4",
+  "variables": {
+    "region": {"value": "eu-west-1"}
+  },
+  "resource_changes": [
+    {
+      "address": "aws_instance.app",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "ami": "ami-00000000000000000",
+          "instance_type": "t3.micro",
+          "tenancy": "default",
+          "root_block_device": [{"volume_size": 8, "volume_type": "gp3"}],
+          "ebs_block_device": []
+        },
+        "after_unknown": {"arn": true, "id": true, "root_block_device": [{"iops": true, "throughput": true}]}
+      }
+    },
+    {
+      "address": "aws_eip.nat",
+      "mode": "managed",
+      "type": "aws_eip",
+      "name": "nat",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"domain": "vpc"},
+        "after_unknown": {"arn": true, "id": true, "public_ip": true}
+      }
+    },
+    {
+      "address": "aws_nat_gateway.this",
+      "mode": "managed",
+      "type": "aws_nat_gateway",
+      "name": "this",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"connectivity_type": "public"},
+        "after_unknown": {"allocation_id": true, "id": true, "subnet_id": true}
+      }
+    },
+    {
+      "address": "aws_eip.edge",
+      "mode": "managed",
+      "type": "aws_eip",
+      "name": "edge",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["no-op"],
+        "before": {
+          "allocation_id": "eipalloc-00000000000000002",
+          "arn": "arn:aws:ec2:us-east-1:000000000000:elastic-ip/eipalloc-00000000000000002",
+          "domain": "vpc"
+        },
+        "after": {
+          "allocation_id": "eipalloc-00000000000000002",
+          "arn": "arn:aws:ec2:us-east-1:000000000000:elastic-ip/eipalloc-00000000000000002",
+          "domain": "vpc"
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "aws_kms_key.cloudfront",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "cloudfront",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"key_usage": "ENCRYPT_DECRYPT"},
+        "after_unknown": {"arn": true, "id": true, "key_id": true}
+      }
+    },
+    {
+      "address": "module.legacy.aws_kms_key.this",
+      "module_address": "module.legacy",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "this",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"key_usage": "ENCRYPT_DECRYPT"},
+        "after_unknown": {"arn": true, "id": true, "key_id": true}
+      }
+    }
+  ],
+  "configuration": {
+    "provider_config": {
+      "aws": {
+        "name": "aws",
+        "full_name": "registry.terraform.io/hashicorp/aws",
+        "expressions": {"region": {"references": ["var.region"]}}
+      },
+      "aws.use1": {
+        "name": "aws",
+        "full_name": "registry.terraform.io/hashicorp/aws",
+        "alias": "use1",
+        "expressions": {"region": {"constant_value": "us-east-1"}}
+      },
+      "module.legacy:aws": {
+        "name": "aws",
+        "full_name": "registry.terraform.io/hashicorp/aws",
+        "module_address": "module.legacy",
+        "expressions": {"region": {"references": ["var.region"]}}
+      }
+    },
+    "root_module": {
+      "resources": [
+        {"address": "aws_instance.app", "mode": "managed", "type": "aws_instance", "name": "app", "provider_config_key": "aws"},
+        {"address": "aws_eip.nat", "mode": "managed", "type": "aws_eip", "name": "nat", "provider_config_key": "aws"},
+        {"address": "aws_nat_gateway.this", "mode": "managed", "type": "aws_nat_gateway", "name": "this", "provider_config_key": "aws"},
+        {"address": "aws_eip.edge", "mode": "managed", "type": "aws_eip", "name": "edge", "provider_config_key": "aws.use1"},
+        {"address": "aws_kms_key.cloudfront", "mode": "managed", "type": "aws_kms_key", "name": "cloudfront", "provider_config_key": "aws.use1"}
+      ],
+      "module_calls": {
+        "legacy": {
+          "source": "./modules/legacy",
+          "module": {
+            "resources": [
+              {"address": "aws_kms_key.this", "mode": "managed", "type": "aws_kms_key", "name": "this", "provider_config_key": "module.legacy:aws"}
+            ]
+          }
+        }
+      }
+    }
+  }
+}

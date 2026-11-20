@@ -18,7 +18,7 @@ func fixture(t *testing.T) Fetcher {
 }
 
 func TestRefreshFiltersOnDemandLinuxShared(t *testing.T) {
-	snap, err := Refresh(context.Background(), fixture(t), "us-east-1", Rules)
+	snap, _, err := Refresh(context.Background(), fixture(t), "us-east-1", Rules, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,9 +74,38 @@ func TestRefreshFiltersOnDemandLinuxShared(t *testing.T) {
 func TestRefreshFailsWhenRuleMatchesNothing(t *testing.T) {
 	rules := append([]Rule{}, Rules...)
 	rules = append(rules, Rule{Service: "AmazonVPC", Scope: ScopeRegion, UsageType: "Renamed-Hours", Operation: ""})
-	_, err := Refresh(context.Background(), fixture(t), "us-east-1", rules)
+	_, _, err := Refresh(context.Background(), fixture(t), "us-east-1", rules, true)
 	if err == nil || !strings.Contains(err.Error(), "matched no on-demand price") {
 		t.Fatalf("err = %v", err)
+	}
+	// Not strict: the snapshot is written without the rule, which is listed.
+	snap, missing, err := Refresh(context.Background(), fixture(t), "us-east-1", rules, false)
+	if err != nil || len(missing) != 1 || !strings.Contains(missing[0], "Renamed-Hours") || len(snap.Prices) == 0 {
+		t.Fatalf("lenient: %v %q", err, missing)
+	}
+}
+
+func TestRegionsHavePrefixes(t *testing.T) {
+	regions := Regions()
+	if len(regions) != 36 || regions[0] != "af-south-1" || regions[len(regions)-1] != "us-west-2" {
+		t.Fatalf("regions %d: %v", len(regions), regions)
+	}
+	seen := map[string]string{}
+	for _, r := range regions {
+		p, ok := regionPrefixes(r)
+		if !ok || len(p) != 2 || p[1] != r+"-" {
+			t.Errorf("%s: prefixes %q", r, p)
+		}
+		if prev, dup := seen[p[0]]; dup {
+			t.Errorf("prefix %s used by %s and %s", p[0], prev, r)
+		}
+		seen[p[0]] = r
+	}
+	if p, _ := regionPrefixes("eu-west-1"); p[0] != "EU-" {
+		t.Errorf("eu-west-1 prefix %q", p[0])
+	}
+	if RegionSupported("cn-north-1") || RegionSupported("us-east-1-bos-1") {
+		t.Error("China and Local Zones are not Price List regions of this endpoint")
 	}
 }
 
@@ -91,19 +120,21 @@ func TestExtractFailsOnAmbiguousRule(t *testing.T) {
 "B","OnDemand","other","0","Inf","Hrs","0.0200","USD","BoxUsage:t3.micro","RunInstances","us-east-1","Other","B.1.1","EC2","US East (N. Virginia)"
 `
 	rule := Rule{Service: "AmazonEC2", Scope: ScopeRegion, UsageType: "BoxUsage:", UsagePrefix: true, Operation: "RunInstances"}
-	_, _, err := extract(strings.NewReader(doc), fileKey{"AmazonEC2", ScopeRegion}, "us-east-1", regionPrefixes["us-east-1"], []Rule{rule})
+	p, _ := regionPrefixes("us-east-1")
+	var missing []string
+	_, _, err := extract(strings.NewReader(doc), fileKey{"AmazonEC2", ScopeRegion}, "us-east-1", p, []Rule{rule}, true, &missing)
 	if err == nil || !strings.Contains(err.Error(), "ambiguous") {
 		t.Fatalf("err = %v", err)
 	}
 	rule.Match = map[string]string{"Operating System": "Linux"}
-	_, prices, err := extract(strings.NewReader(doc), fileKey{"AmazonEC2", ScopeRegion}, "us-east-1", regionPrefixes["us-east-1"], []Rule{rule})
+	_, prices, err := extract(strings.NewReader(doc), fileKey{"AmazonEC2", ScopeRegion}, "us-east-1", p, []Rule{rule}, true, &missing)
 	if err != nil || prices[Key("AmazonEC2", "BoxUsage:t3.micro", "RunInstances")].SKU != "A" {
 		t.Fatalf("with filter: %v %v", prices, err)
 	}
 }
 
 func TestLoadRejectsTamperedAndNewerSnapshots(t *testing.T) {
-	snap, err := Refresh(context.Background(), fixture(t), "us-east-1", Rules)
+	snap, _, err := Refresh(context.Background(), fixture(t), "us-east-1", Rules, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +184,7 @@ func TestLoadAcceptsV1Snapshot(t *testing.T) {
 }
 
 func TestRefreshKeepsBillingFieldsAndTiers(t *testing.T) {
-	snap, err := Refresh(context.Background(), fixture(t), "us-east-1", Rules)
+	snap, _, err := Refresh(context.Background(), fixture(t), "us-east-1", Rules, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +224,7 @@ func TestRefreshKeepsBillingFieldsAndTiers(t *testing.T) {
 }
 
 func TestNormalizeUsageType(t *testing.T) {
-	p := regionPrefixes["us-east-1"]
+	p, _ := regionPrefixes("us-east-1")
 	cases := map[string]string{
 		"USE1-VpcEndpoint-Hours": "VpcEndpoint-Hours",
 		"us-east-1-KMS-Keys":     "KMS-Keys",

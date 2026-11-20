@@ -80,14 +80,20 @@ type fileKey struct{ service, scope string }
 // Refresh downloads the offer files the rules need and extracts only the
 // matching on-demand prices. The CSV form is streamed, so the 300 MB EC2 file
 // never sits in memory.
-func Refresh(ctx context.Context, f Fetcher, region string, rules []Rule) (*Snapshot, error) {
-	prefixes, ok := regionPrefixes[region]
+//
+// A rule may have no price in a region (a product AWS does not sell there):
+// the snapshot then lacks those keys, a resource that needs one is unpriced,
+// and the rule is listed in Missing. With strict, a rule without a price is
+// an error instead; us-east-1 has every product, so a strict refresh there
+// detects a change of the offer format.
+func Refresh(ctx context.Context, f Fetcher, region string, rules []Rule, strict bool) (*Snapshot, []string, error) {
+	prefixes, ok := regionPrefixes(region)
 	if !ok {
-		return nil, fmt.Errorf("region %q: usage type prefixes unknown (supported: %s)", region, strings.Join(supportedRegions(), ", "))
+		return nil, nil, fmt.Errorf("region %q: usage type prefixes unknown (supported: %s)", region, strings.Join(Regions(), ", "))
 	}
 	var idx offerIndex
 	if err := f.getJSON(ctx, "/offers/v1.0/aws/index.json", &idx); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	groups := map[fileKey][]Rule{}
@@ -107,10 +113,11 @@ func Refresh(ctx context.Context, f Fetcher, region string, rules []Rule) (*Snap
 	})
 
 	snap := &Snapshot{SchemaVersion: SchemaVersion, Region: region, Currency: "USD", Prices: map[string]Price{}}
+	var missing []string
 	for _, k := range order {
 		offer, ok := idx.Offers[k.service]
 		if !ok {
-			return nil, fmt.Errorf("offer %s not in the Price List index", k.service)
+			return nil, nil, fmt.Errorf("offer %s not in the Price List index", k.service)
 		}
 		var jsonPath string
 		switch k.scope {
@@ -119,50 +126,44 @@ func Refresh(ctx context.Context, f Fetcher, region string, rules []Rule) (*Snap
 		case ScopeRegion:
 			var ri regionIndex
 			if err := f.getJSON(ctx, offer.CurrentRegionIndexURL, &ri); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			reg, ok := ri.Regions[region]
 			if !ok {
-				return nil, fmt.Errorf("offer %s has no file for region %s", k.service, region)
+				return nil, nil, fmt.Errorf("offer %s has no file for region %s", k.service, region)
 			}
 			jsonPath = reg.CurrentVersionURL
 		default:
-			return nil, fmt.Errorf("rule scope %q invalid", k.scope)
+			return nil, nil, fmt.Errorf("rule scope %q invalid", k.scope)
 		}
 		csvPath := strings.TrimSuffix(jsonPath, ".json") + ".csv"
 		resp, url, err := f.get(ctx, csvPath)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		src, prices, err := extract(resp.Body, k, region, prefixes, groups[k])
+		var miss []string
+		src, prices, err := extract(resp.Body, k, region, prefixes, groups[k], strict, &miss)
 		_ = resp.Body.Close()
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", url, err)
+			return nil, nil, fmt.Errorf("%s: %w", url, err)
 		}
 		src.Path = csvPath
 		snap.Sources = append(snap.Sources, src)
 		for key, p := range prices {
 			snap.Prices[key] = p
 		}
+		missing = append(missing, miss...)
 	}
 	snap.Seal()
-	return snap, nil
-}
-
-func supportedRegions() []string {
-	out := make([]string, 0, len(regionPrefixes))
-	for r := range regionPrefixes {
-		out = append(out, r)
-	}
-	sort.Strings(out)
-	return out
+	return snap, missing, nil
 }
 
 var requiredColumns = []string{"SKU", "TermType", "PriceDescription", "StartingRange", "EndingRange", "Unit", "PricePerUnit", "Currency", "usageType", "operation", "RateCode", "serviceName", "Location"}
 
 // extract reads one CSV offer file: five metadata lines, a header, then one
-// row per price dimension.
-func extract(r io.Reader, k fileKey, region string, prefixes []string, rules []Rule) (Source, map[string]Price, error) {
+// row per price dimension. A rule that matches no on-demand price is an
+// error when strict, else it is appended to missing.
+func extract(r io.Reader, k fileKey, region string, prefixes []string, rules []Rule, strict bool, missing *[]string) (Source, map[string]Price, error) {
 	cr := csv.NewReader(bufio.NewReaderSize(r, 1<<20))
 	cr.FieldsPerRecord = -1
 	cr.ReuseRecord = true
@@ -309,9 +310,13 @@ func extract(r io.Reader, k fileKey, region string, prefixes []string, rules []R
 		}
 	}
 	for i, rule := range rules {
-		if hits[i] == 0 {
+		if hits[i] > 0 {
+			continue
+		}
+		if strict {
 			return src, nil, fmt.Errorf("rule %s matched no on-demand price; the offer changed, update internal/catalog/rules.go", rule)
 		}
+		*missing = append(*missing, rule.String())
 	}
 	for key, byStart := range tiers {
 		p, ok := prices[key]

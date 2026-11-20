@@ -21,16 +21,19 @@ echo "ok version: $got"
 
 # 2. embedded snapshot
 "$bin" pricing verify > "$work/verify.txt"
-head -n 1 "$work/verify.txt"
-grep -q '^ok us-east-1: ' "$work/verify.txt" || { echo "pricing verify: unexpected output" >&2; exit 1; }
+grep '^ok us-east-1: ' "$work/verify.txt" || { echo "pricing verify: unexpected output" >&2; exit 1; }
+n="$(grep -c '^ok ' "$work/verify.txt")"
+[ "$n" -ge 36 ] || { echo "pricing verify: $n embedded snapshots, want every region (36)" >&2; exit 1; }
 
 # 3. baseline case: exit code and Markdown equal to the golden. The golden is
-# rendered by the tests with version "test" and the fixture snapshot, so the
-# footer line (version, snapshot date and hash) is the only line excluded.
+# rendered by the tests with version "test" and the fixture snapshot of
+# us-east-1 passed explicitly, so the footer line (version, snapshot date and
+# hash) is the only line excluded, and --region us-east-1 makes the same
+# explicit choice (the plan names no region).
 want_exit="$(cat "$case_dir/want_exit")"
 set +e
 # shellcheck disable=SC2046 # args.txt holds whitespace-separated flags
-"$bin" diff --plan "$case_dir/plan.json" --usage "$case_dir/usage.json" $(cat "$case_dir/args.txt") > "$work/got.md"
+"$bin" diff --plan "$case_dir/plan.json" --usage "$case_dir/usage.json" --region us-east-1 $(cat "$case_dir/args.txt") > "$work/got.md"
 code=$?
 set -e
 if [ "$code" != "$want_exit" ]; then

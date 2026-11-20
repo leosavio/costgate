@@ -5,6 +5,7 @@ package estimate
 import (
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 
 	"github.com/leosavio/costgate/internal/catalog"
@@ -54,7 +55,7 @@ const (
 	ReasonProvider = "provider"
 	// ReasonType: AWS resource type not in the pricing map.
 	ReasonType = "type"
-	// ReasonRegion: the resource is in another region than the snapshot.
+	// ReasonRegion: costgate has no price snapshot of the resource region.
 	ReasonRegion = "region"
 	// ReasonConfig: a configuration the estimator does not model, or a
 	// value unknown at plan time.
@@ -70,6 +71,9 @@ type Side struct {
 	Lines    []Line
 	Unpriced string
 	Reason   string // one of the Reason* codes when Unpriced is set
+	// Region is the region whose snapshot priced the side (a replace may
+	// move a resource to another region).
+	Region string
 }
 
 // Resource is the estimate of one resource change.
@@ -84,6 +88,11 @@ type Resource struct {
 	// Blocking is true when the resource is unpriced on a side that the
 	// change creates or modifies.
 	Blocking bool
+	// Region is the region of the side the report describes (after, or
+	// before for a delete): the one the plan states, or Options.Region
+	// when it states none (RegionAssumed).
+	Region        string
+	RegionAssumed bool
 }
 
 // Unpriced returns the reason the resource could not be priced, if any.
@@ -111,10 +120,30 @@ type Ignored struct {
 	Action   plan.Action `json:"action"`
 }
 
+// Prices returns the price snapshot of a region, or nil when costgate has
+// none for it.
+type Prices func(region string) (*catalog.Snapshot, error)
+
+// How Options.Region was chosen.
+const (
+	// RegionFromFlag: the caller set it (--region).
+	RegionFromFlag = "flag"
+	// RegionFromPlan: the only region the plan names.
+	RegionFromPlan = "plan"
+	// RegionFromDefault: the plan names no region or several; us-east-1.
+	RegionFromDefault = "default"
+)
+
+// DefaultRegion prices the resources of a plan that names no region.
+const DefaultRegion = "us-east-1"
+
 // Options control the estimate.
 type Options struct {
-	// Region is the region of the price snapshot.
+	// Region prices the resources whose region the plan does not state;
+	// every other resource is priced with the snapshot of its own region.
 	Region string
+	// RegionFrom is one of the RegionFrom* values.
+	RegionFrom string
 	// IgnoreProviders lists providers whose resources are left out of
 	// the estimate and of the gate. An entry matches the provider source
 	// address exactly or as its last segments: "helm", "hashicorp/helm"
@@ -122,20 +151,74 @@ type Options struct {
 	IgnoreProviders []string
 }
 
+// RegionUse is a snapshot the estimate used.
+type RegionUse struct {
+	Region   string
+	Snapshot *catalog.Snapshot
+	// Resources counts the resources priced with it (types with a
+	// formula, AWS provider).
+	Resources int
+}
+
 // Result aggregates every managed resource of the plan.
 type Result struct {
-	Region    string
-	Resources []Resource
-	Before    *big.Rat
-	After     *big.Rat
-	Delta     *big.Rat
+	// Region is Options.Region, and RegionFrom how it was chosen.
+	Region     string
+	RegionFrom string
+	Resources  []Resource
+	Before     *big.Rat
+	After      *big.Rat
+	Delta      *big.Rat
 	// IgnoredProviders is Options.IgnoreProviders; Ignored lists the
 	// resources it matched, in address order.
 	IgnoredProviders []string
 	Ignored          []Ignored
-	// RegionMismatches lists the provider configurations that deploy to
-	// another region than Region.
+	// Snapshots lists the snapshots that priced at least one resource,
+	// sorted by region; the one of Region alone when none did.
+	Snapshots []RegionUse
+	// Assumed counts the priced resources whose region the plan does not
+	// state, priced in Region; PlanRegions are the regions it states.
+	Assumed     int
+	PlanRegions []string
+	// RegionMismatches lists the provider configurations that deploy to a
+	// region costgate has no snapshot of.
 	RegionMismatches []RegionMismatch
+}
+
+// Snapshot returns the snapshot used for region, or nil.
+func (r *Result) Snapshot(region string) *catalog.Snapshot {
+	for _, u := range r.Snapshots {
+		if u.Region == region {
+			return u.Snapshot
+		}
+	}
+	return nil
+}
+
+// PlanRegions lists the regions the plan states for its AWS resources, by
+// any of the sources of the region resolver, sorted.
+func PlanRegions(p *plan.Plan) []string {
+	rr := newRegionResolver(p)
+	seen := map[string]bool{}
+	for _, rc := range p.ResourceChanges {
+		if rc.Mode != "managed" || !awsProvider(rc.ProviderName) {
+			continue
+		}
+		for _, v := range []any{rc.Change.Before, rc.Change.After} {
+			if v == nil {
+				continue
+			}
+			if r, _ := rr.resolve(rc, v); r != "" {
+				seen[r] = true
+			}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for r := range seen {
+		out = append(out, r)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Blocking lists unpriced resources that the change creates, updates or replaces.
@@ -208,12 +291,55 @@ func providerShortName(name string) string {
 	return name[strings.LastIndex(name, "/")+1:]
 }
 
-// Estimate prices every managed resource change of p.
-func Estimate(p *plan.Plan, cat *catalog.Snapshot, use *usage.File, opt Options) (*Result, error) {
+// Estimate prices every managed resource change of p, each side with the
+// snapshot of its region. The snapshot of opt.Region must exist.
+func Estimate(p *plan.Plan, prices Prices, use *usage.File, opt Options) (*Result, error) {
 	region := opt.Region
-	res := &Result{Region: region, Before: money.Zero(), After: money.Zero(), IgnoredProviders: opt.IgnoreProviders}
+	res := &Result{Region: region, RegionFrom: opt.RegionFrom, Before: money.Zero(), After: money.Zero(),
+		IgnoredProviders: opt.IgnoreProviders, PlanRegions: PlanRegions(p)}
 	regions := newRegionResolver(p)
 	unpricedIn := map[string]int{} // region -> resources unpriced for being there
+	loaded := map[string]*catalog.Snapshot{}
+	used := map[string]int{}
+	snapshot := func(r string) (*catalog.Snapshot, error) {
+		if s, ok := loaded[r]; ok {
+			return s, nil
+		}
+		s, err := prices(r)
+		if err != nil {
+			return nil, fmt.Errorf("price snapshot of %s: %w", r, err)
+		}
+		if s != nil && s.Region != r {
+			return nil, fmt.Errorf("price snapshot of %s is for region %s", r, s.Region)
+		}
+		loaded[r] = s
+		return s, nil
+	}
+	if s, err := snapshot(region); err != nil {
+		return nil, err
+	} else if s == nil {
+		return nil, fmt.Errorf("no price snapshot for region %s", region)
+	}
+	// side resolves the region of one side and prices it. A side that
+	// states no region takes fallback (the region the before side states),
+	// then Options.Region; assumed is true in the last case.
+	side := func(rc plan.ResourceChange, value, unknown any, u usage.Resolved, fallback, fallbackSrc string, zero *bool) (Side, string, string, bool, error) {
+		reg, src := regions.resolve(rc, value)
+		if reg == "" {
+			reg, src = fallback, fallbackSrc
+		}
+		assumed := reg == ""
+		if assumed {
+			reg = region
+		}
+		snap, err := snapshot(reg)
+		if err != nil {
+			return Side{}, "", "", false, err
+		}
+		s := priceSide(rc, newAttrs(value, unknown), u, snap, reg, src, zero)
+		s.Region = reg
+		return s, reg, src, assumed, nil
+	}
 	for _, rc := range p.ResourceChanges {
 		if rc.Mode != "managed" {
 			continue
@@ -239,21 +365,30 @@ func Estimate(p *plan.Plan, cat *catalog.Snapshot, use *usage.File, opt Options)
 			// The object stays in the account; only Terraform stops managing it.
 			afterValue, afterUnknown = rc.Change.Before, nil
 		}
-		var shownRegion string
+		var beforeRegion, beforeSrc string
 		if beforeExists {
-			reg, src := regions.resolve(rc, rc.Change.Before)
-			shownRegion = reg
-			r.Before = priceSide(rc, newAttrs(rc.Change.Before, nil), u, cat, region, reg, src, &r.ZeroCost)
+			if r.Before, r.Region, beforeSrc, r.RegionAssumed, err = side(rc, rc.Change.Before, nil, u, "", "", &r.ZeroCost); err != nil {
+				return nil, err
+			}
+			if !r.RegionAssumed {
+				beforeRegion = r.Region
+			}
 		}
 		if afterExists {
-			reg, src := regions.resolve(rc, afterValue)
-			if reg != "" || shownRegion == "" {
-				shownRegion = reg
+			if r.After, r.Region, _, r.RegionAssumed, err = side(rc, afterValue, afterUnknown, u, beforeRegion, beforeSrc, &r.ZeroCost); err != nil {
+				return nil, err
 			}
-			r.After = priceSide(rc, newAttrs(afterValue, afterUnknown), u, cat, region, reg, src, &r.ZeroCost)
 		}
-		if r.UnpricedReason() == ReasonRegion {
-			unpricedIn[shownRegion]++
+		_, formula := estimators[rc.Type]
+		priced := formula && awsProvider(rc.ProviderName) && !isZeroCost(rc.Type)
+		switch {
+		case r.UnpricedReason() == ReasonRegion:
+			unpricedIn[r.Region]++
+		case priced:
+			used[r.Region]++
+			if r.RegionAssumed {
+				res.Assumed++
+			}
 		}
 		if r.Before.Monthly == nil {
 			r.Before.Monthly = money.Zero()
@@ -271,13 +406,30 @@ func Estimate(p *plan.Plan, cat *catalog.Snapshot, use *usage.File, opt Options)
 		res.Resources = append(res.Resources, r)
 	}
 	res.Delta = money.Sub(res.After, res.Before)
-	res.RegionMismatches = regions.mismatches(region, unpricedIn)
+	mismatches, err := regions.mismatches(func(r string) (bool, error) {
+		s, err := snapshot(r)
+		return s != nil, err
+	}, unpricedIn)
+	if err != nil {
+		return nil, err
+	}
+	res.RegionMismatches = mismatches
+	for r, s := range loaded {
+		if s != nil && used[r] > 0 {
+			res.Snapshots = append(res.Snapshots, RegionUse{Region: r, Snapshot: s, Resources: used[r]})
+		}
+	}
+	if len(res.Snapshots) == 0 {
+		res.Snapshots = []RegionUse{{Region: region, Snapshot: loaded[region]}}
+	}
+	sort.Slice(res.Snapshots, func(i, j int) bool { return res.Snapshots[i].Region < res.Snapshots[j].Region })
 	return res, nil
 }
 
-// priceSide prices one side. resRegion is the region detected for the side
-// ("" when the plan does not say) and resSource where it came from.
-func priceSide(rc plan.ResourceChange, a attrs, u usage.Resolved, cat *catalog.Snapshot, region, resRegion, resSource string, zero *bool) Side {
+// priceSide prices one side with cat, the snapshot of resRegion (nil when
+// costgate has none). resSource says where the region came from ("" when the
+// plan does not state it).
+func priceSide(rc plan.ResourceChange, a attrs, u usage.Resolved, cat *catalog.Snapshot, resRegion, resSource string, zero *bool) Side {
 	s := Side{Exists: true, Monthly: money.Zero()}
 	if isZeroCost(rc.Type) {
 		*zero = true
@@ -293,12 +445,13 @@ func priceSide(rc plan.ResourceChange, a attrs, u usage.Resolved, cat *catalog.S
 		s.Unpriced, s.Reason = "resource type not in the pricing map", ReasonType
 		return s
 	}
-	if resRegion != "" && resRegion != region {
+	if cat == nil {
 		s.Reason = ReasonRegion
-		if resSource == regionFromAttribute {
-			s.Unpriced = fmt.Sprintf("resource region %s differs from priced region %s", resRegion, region)
-		} else {
-			s.Unpriced = fmt.Sprintf("resource region %s (from %s) differs from priced region %s", resRegion, resSource, region)
+		switch resSource {
+		case regionFromAttribute, "":
+			s.Unpriced = fmt.Sprintf("no price snapshot for resource region %s", resRegion)
+		default:
+			s.Unpriced = fmt.Sprintf("no price snapshot for resource region %s (from %s)", resRegion, resSource)
 		}
 		return s
 	}

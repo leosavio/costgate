@@ -26,20 +26,35 @@ Bulk API e devolve Markdown/JSON + exit code para gate de PR (HTML autocontido o
 | Componente | Tecnologia | Nota |
 |---|---|---|
 | `cmd/costgate` | Go 1.27, só stdlib | binário único; `-X main.version` no release |
-| `internal/plan` | parser de `show -json` (`format_version` 1.x) | rejeita state; Terraform e OpenTofu; lê `configuration` (`provider_config_key`, `region` constante do provider) |
+| `internal/plan` | parser de `show -json` (`format_version` 1.x) | rejeita state; Terraform e OpenTofu; lê `configuration` (`provider_config_key`, `region` do provider: constante ou `var.x` do módulo raiz via `variables`) |
 | `internal/usage` | premissas JSON `schema_version` 1 | precedência resources > types > defaults > embutido; EKS: `extended_support_hours`, `auto_mode_instance_hours` |
-| `internal/catalog` | snapshot `schema_version` 2 + `pricing refresh` (CSV em streaming) | regras de SKU em `rules.go`; `sha256` verificado no load; lê v1 e v2 |
-| `internal/estimate` | fórmulas por tipo + lista de custo zero + região por recurso (`region.go`) | `resources.go`; valores em `math/big.Rat`; motivo de não precificado (`provider`/`type`/`region`/`config`/`price`) |
-| `internal/report` | gate (exit 0/1/2/3), Markdown com marcador, JSON `schema_version` 1, JSON Lines, HTML (`--html-out`) | chaves da fatura por linha (`sku`, `usage_type`, `rate_code`, `billing_description`, `billing_rule`); `warnings` (`region_mismatch`) e `ignored` só quando se aplicam; HTML = `assets/` via `go:embed`, embute o relatório JSON + `view` com valores formatados em Go |
-| `pricing/us-east-1.json`, `pricing/us-west-2.json` | snapshots embutidos (`go:embed *.json`) | 2684 e 2648 preços, as of 2026-11-20 (inclui 1261/1244 taxas do EKS Auto Mode) |
-| `scripts/pricing-diff.sh` | sh + `jq` | compara só o mapa `prices` com um ref; exit 0 igual, 1 mudou (usado pelo `refresh-pricing.yml`) |
+| `internal/catalog` | snapshot `schema_version` 2 (JSON ou gzip determinístico) + `pricing refresh` (CSV em streaming) | regras de SKU e prefixo de usage type das 36 regiões (`regionCodes`) em `rules.go`; regra sem preço na região = aviso (`--strict` = erro); `sha256` verificado no load; lê v1 e v2 |
+| `internal/estimate` | fórmulas por tipo + lista de custo zero + região por recurso (`region.go`) | `resources.go`; valores em `math/big.Rat`; cada lado precificado com o snapshot da sua região (`Prices`); região padrão para recurso sem região (`RegionFrom`); motivo de não precificado (`provider`/`type`/`region`/`config`/`price`) |
+| `internal/report` | gate (exit 0/1/2/3), Markdown com marcador, JSON `schema_version` 1, JSON Lines, HTML (`--html-out`) | chaves da fatura por linha (`sku`, `usage_type`, `rate_code`, `billing_description`, `billing_rule`); `snapshots[]` e `resources[].region` sempre; `warnings` (`region_mismatch`, `region_assumed`) e `ignored` só quando se aplicam; HTML = `assets/` via `go:embed`, embute o relatório JSON + `view` com valores formatados em Go |
+| `pricing/<região>.json.gz` | 36 snapshots embutidos (`go:embed *.json.gz`, 1,8 MB) | todas as regiões da Price List pública (comerciais + GovCloud), as of 2026-11-20; China fora (outro endpoint, CNY) |
+| `scripts/refresh-all.sh` | bash + `jq` + `gzip` | regrava todas as regiões, 3 por vez; us-east-1 com `--strict`; mantém o arquivo da região cujo `prices` não mudou |
+| `scripts/pricing-diff.sh` | sh + `jq` + `gzip` | compara só o mapa `prices` com um ref; exit 0 igual, 1 mudou (usado pelo `refresh-pricing.yml`) |
 | `site/` | landing estática (Cloudflare Pages, stack `site-cdn-dns-central/cf-pages/costgate-site`) | `ping.js`: 1 evento por aba, sem cookie, filtros de robô; só a página mede |
 | `scripts/adoption-stats.sh` | sh + `gh` + `jq` | métricas de adoção do mantenedor; dado no repo privado `costgate-metrics` |
 | CI | GitHub Actions: `ci.yml` (lint + matriz nativa de teste linux/darwin × amd64/arm64), `release.yml` (cosign keyless), `install-smoke.yml` (brew, go install e tarball nas 4 plataformas), `refresh-pricing.yml` (semanal, todas as regiões embutidas; PR só se `prices` mudar, branch única `pricing/refresh`; `dry_run_pr` prova o PR) | actions por SHA |
 
 ## Estado atual (onde parei)
 
-> Última atualização: 2026-11-20 (8ª sessão, relatório HTML, branch `feat/html-report`)
+> Última atualização: 2026-11-20 (9ª sessão, todas as regiões, branch `feat/all-regions`)
+
+9ª sessão (decisão do operador, 2026-11-20: "a ferramenta tem que valer para toda a AWS"):
+snapshots das 36 regiões da Price List pública embutidos em gzip (`pricing/<região>.json.gz`,
+1,8 MB); cada lado de cada recurso precificado com o snapshot da sua região, então plan
+multi-região sai certo sem flag; `--region` virou a região padrão dos recursos cuja região o plan
+não informa (padrão: `--region`, senão o único `--pricing`, senão a única região do plan, senão
+us-east-1) e o aviso `region_assumed` conta os recursos assim precificados quando quem chamou não
+escolheu; `region = var.x` do provider do módulo raiz resolvido por `variables` do plan;
+`--pricing` repetível e aceita `.json.gz`; `pricing regions` lista as regiões; refresh tolerante a
+regra sem preço na região (`--strict` para us-east-1). JSON ganhou `snapshots[]` e
+`resources[].region`/`region_assumed`; o JSON Lines usa o snapshot de cada linha. Goldens via
+`Env.Embedded` com fixtures us-east-1 + eu-west-1 (gerado em teste, preços × 1,25, prefixo `EU-`),
+casos novos `multi-region` e `region-variable`. ADR-001 item "Só us-east-1 é versionado" em
+conflito com o estado (registrado em `leosavio-org/knowledge/adr-drift.md`). Sem release.
 
 8ª sessão: relatório HTML (P7 da avaliação no workshop Spark on EKS,
 `aws-spark-on-eks-workshop/extra-02-avaliacao-ferramentas/kubecost-costgate-insights.md` Parte 1.4):
@@ -111,8 +126,9 @@ Operador confirmou D4/D5 da ADR-001. Integração com o foundation **só documen
 ## Próximos passos
 
 - [ ] Foundation: errata na ADR-011 §2 (Infracost → costgate) e job de custo a partir de `docs/integration/github-actions.md`
-- [ ] Release com as mudanças da 7ª sessão (região, gp3, us-west-2, `--ignore-provider`, EKS); revalidar no plan do workshop com `--region us-west-2`
-- [ ] Resolver `region = var.<nome>` do provider pelo `variables` do plan (hoje só constante, ARN ou recursos irmãos)
+- [ ] Release v0.3.0 com as mudanças da 7ª à 9ª sessão (região por recurso, 36 regiões, gp3, `--ignore-provider`, EKS, HTML); revalidar no plan do workshop sem `--region`
+- [ ] Preço de Local Zone / Wavelength (hoje recebe o preço da região-mãe) quando um caso real pedir
+- [ ] Partição China (`cn-*`): endpoint `pricing.cn-north-1.amazonaws.com.cn`, preços em CNY; exige moeda no relatório
 - [ ] P4 do workshop: disco raiz do NodeClass/EC2NodeClass (`kubectl_manifest`) por premissa
 - [ ] Resolver `subnet_ids` desconhecido pela seção `configuration` do plan (hoje usa `az_count`)
 - [ ] ASG + launch template (`desired_capacity` × tipo)
@@ -128,9 +144,9 @@ go test ./internal/cli -update                       # regrava goldens; revisar 
 GOARCH=amd64 go test ./...                           # determinismo cross-arch (Rosetta)
 bash scripts/html-check.sh                           # goldens HTML no Chrome headless (data-status="ok")
 bash scripts/html-check.sh screenshot docs/images/html-report.png baseline 'open=aws_acmpca_certificate_authority.internal'
-go run ./cmd/costgate pricing refresh                # baixa a Bulk API pública (~19 s), grava pricing/us-east-1.json
-go run ./cmd/costgate pricing refresh --region us-west-2 --out pricing/us-west-2.json
-go run ./cmd/costgate pricing verify                 # confere todos os snapshots embutidos
+bash scripts/refresh-all.sh                          # todas as regiões, 3 por vez (~4 min), grava pricing/*.json.gz
+go run ./cmd/costgate pricing refresh --region sa-east-1 --out /tmp/sa-east-1.json.gz
+go run ./cmd/costgate pricing verify                 # confere os 36 snapshots embutidos
 sh scripts/pricing-diff.sh HEAD                      # o que o refresh mudou em `prices` (exit 1 = mudou)
 go run ./cmd/costgate diff --plan testdata/cases/baseline/plan.json --usage testdata/cases/baseline/usage.json --max-monthly-delta 50 --json-lines /tmp/lines.jsonl
 git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z   # release.yml: binários, checksums, assinatura, fórmula no tap

@@ -1,0 +1,1 @@
+The plan alone picks the regions (no --pricing): see runCaseEnv in internal/cli/cli_test.go.

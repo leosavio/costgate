@@ -73,6 +73,14 @@
       }
     ]
   },
+  "snapshots": [
+    {
+      "region": "us-east-1",
+      "as_of": "2026-11-11T15:35:57Z",
+      "sha256": "15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744",
+      "resources": 4
+    }
+  ],
   "totals": {
     "monthly_before": 0.0000,
     "monthly_after": 1.0000,
@@ -102,7 +110,8 @@
       },
       "after": null,
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_instance.from_var",
@@ -117,7 +126,8 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": true
+      "blocking": true,
+      "region": "us-east-1"
     },
     {
       "address": "aws_kms_key.app",
@@ -146,7 +156,8 @@
         ]
       },
       "delta": 1.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_lb.legacy",
@@ -166,7 +177,8 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_nat_gateway.west",
@@ -176,12 +188,13 @@
       "before": null,
       "after": {
         "monthly": 0.0000,
-        "unpriced": "resource region us-west-2 differs from priced region us-east-1",
+        "unpriced": "no price snapshot for resource region us-west-2",
         "unpriced_reason": "region",
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": true
+      "blocking": true,
+      "region": "us-west-2"
     },
     {
       "address": "aws_networkfirewall_firewall.inspection",
@@ -196,7 +209,8 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": true
+      "blocking": true,
+      "region": "us-east-1"
     },
     {
       "address": "aws_s3_bucket.logs",
@@ -226,7 +240,8 @@
         ]
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_vpc_endpoint.gwlb",
@@ -241,7 +256,8 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": true
+      "blocking": true,
+      "region": "us-east-1"
     }
   ],
   "usage_not_declared": [

@@ -4,10 +4,12 @@ package catalog
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"sort"
 
@@ -67,7 +69,7 @@ func sameFirstTier(a, b Price) bool {
 		a.ServiceName == b.ServiceName && a.Location == b.Location
 }
 
-// Snapshot is the content of pricing/<region>.json.
+// Snapshot is the content of pricing/<region>.json.gz.
 type Snapshot struct {
 	SchemaVersion int              `json:"schema_version"`
 	Region        string           `json:"region"`
@@ -132,9 +134,48 @@ func (s *Snapshot) Encode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Load decodes and validates a snapshot: schema version, digest and every
-// price value.
+// EncodeGzip returns Encode compressed with gzip. The header has no name and
+// no modification time, so the same snapshot always gives the same bytes and
+// an unchanged region does not change its embedded file.
+func (s *Snapshot) EncodeGzip() ([]byte, error) {
+	data, err := s.Encode()
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	zw, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := zw.Write(data); err != nil {
+		return nil, err
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// maxSnapshotBytes bounds a decompressed snapshot (a region is about 1.3 MB).
+const maxSnapshotBytes = 64 << 20
+
+// Load decodes and validates a snapshot, plain JSON or gzip: schema version,
+// digest and every price value.
 func Load(data []byte) (*Snapshot, error) {
+	if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
+		zr, err := gzip.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, fmt.Errorf("pricing snapshot: %w", err)
+		}
+		plain, err := io.ReadAll(io.LimitReader(zr, maxSnapshotBytes+1))
+		if err != nil {
+			return nil, fmt.Errorf("pricing snapshot: %w", err)
+		}
+		if len(plain) > maxSnapshotBytes {
+			return nil, fmt.Errorf("pricing snapshot: more than %d bytes decompressed", maxSnapshotBytes)
+		}
+		data = plain
+	}
 	// Version first, without DisallowUnknownFields: a newer snapshot has
 	// fields this build does not know, and the useful error is the version.
 	var probe struct {

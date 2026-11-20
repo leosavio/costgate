@@ -154,9 +154,16 @@
       add(d, "span", { class: "lbl" }, x[0] + " · USD/month");
       add(d, "span", { class: "val " + (x[0] === "delta" ? signClass(x[1]) : "") }, x[1]);
     });
-    var s = $("snapshot");
-    add(s, "div", null, "AWS Price List snapshot " + V.region.snapshot + " · as of " + R.pricing.as_of);
-    add(s, "div", { class: "mono", title: R.pricing.sha256 }, "sha256 " + V.sha256_short + " · priced region " + R.region);
+    var s = $("snapshot"), snaps = V.region.snapshots;
+    if (snaps.length > 1) {
+      add(s, "div", null, "AWS Price List snapshots of " + plural(snaps.length, "region", "regions") + ": " +
+        snaps.map(function (x) { return x.region; }).join(", "));
+      add(s, "div", { class: "mono" }, "default region " + R.region);
+      return;
+    }
+    var one = snaps[0];
+    add(s, "div", null, "AWS Price List snapshot " + one.region + " · as of " + one.as_of);
+    add(s, "div", { class: "mono", title: one.sha256 }, "sha256 " + one.sha256_short + " · priced region " + R.region);
   }
 
   function checksCard() {
@@ -243,7 +250,7 @@
       var open = st.open === row.r.address;
       var tr = add(tb, "tr", { class: "res" + (open ? " open" : "") }), td = add(tr, "td");
       add(td, "span", { class: "addr" }, row.r.address);
-      add(td, "span", { class: "type" }, row.r.type);
+      add(td, "span", { class: "type" }, row.r.type + (V.region.multi ? " · " + row.r.region + (row.r.region_assumed ? " (default)" : "") : ""));
       add(add(tr, "td"), "span", { class: "act act-" + row.r.action }, row.r.action);
       add(tr, "td", { class: "num" }, row.v.before);
       add(tr, "td", { class: "num" }, row.v.after);
@@ -349,20 +356,29 @@
     list.forEach(function (w) { warning(box, w); });
   }
 
-  // ---- (6) pricing region
+  // ---- (6) pricing regions
+  var REGION_FROM = { flag: "--region or the only --pricing file", plan: "the only region the plan names", "default": "default" };
   function regionCard() {
     var box = $("region");
-    var ws = (R.warnings || []).filter(function (w) { return w.code === "region_mismatch"; });
-    cardHead(box, "Pricing region", ws.length ? plural(ws.length, "warning", "warnings") : "");
+    var ws = (R.warnings || []).filter(function (w) { return w.code.indexOf("region_") === 0; });
+    cardHead(box, "Pricing regions", ws.length ? plural(ws.length, "warning", "warnings") : "");
+    add(box, "p", { class: "muted small" }, "Each resource is priced with the snapshot of its own region, taken from the plan: " +
+      "its region attribute, the region of its provider configuration (a constant or a root variable), or its ARN. " +
+      "A resource whose region the plan does not state is priced in the default region.");
     var dl = add(box, "dl", { class: "kv" });
-    kv(dl, "priced region (--region)", V.region.priced, "mono");
-    kv(dl, "snapshot region", V.region.snapshot, "mono");
-    add(box, "p", { class: "muted small" }, "costgate takes the region of a resource from the plan: its region attribute, " +
-      "the region of its provider configuration, or its ARN. A resource in another region stays unpriced; a resource " +
-      "with no known region is priced with the rates and bill codes of this region.");
+    kv(dl, "default region", V.region.priced + " (" + (REGION_FROM[V.region.from] || V.region.from) + ")", "mono");
+    var t = add(box, "table", { class: "lines sources" }), h = add(t, "tr");
+    ["Region", "Resources", "As of", "sha256"].forEach(function (x) { add(h, "th", null, x); });
+    V.region.snapshots.forEach(function (x) {
+      var tr = add(t, "tr");
+      add(tr, "td", { class: "mono" }, x.region);
+      add(tr, "td", { class: "num" }, x.resources);
+      add(tr, "td", { class: "mono" }, x.as_of);
+      add(tr, "td", { class: "mono", title: x.sha256 }, x.sha256_short);
+    });
     ws.forEach(function (w) { warning(box, w); });
     if (!V.region.mismatch.length) {
-      add(box, "p", { class: "muted" }, "No resource in the plan is in a region different from the priced one.");
+      add(box, "p", { class: "muted" }, "Every resource region of the plan has a price snapshot.");
       return;
     }
     var ul = add(box, "ul", { class: "list" });
@@ -405,7 +421,8 @@
 
   function sourcesCard() {
     var box = $("sources");
-    cardHead(box, "Price snapshot", plural(R.pricing.sources.length, "offer file", "offer files"));
+    cardHead(box, V.region.snapshots.length > 1 ? "Price snapshot of the default region" : "Price snapshot",
+      plural(R.pricing.sources.length, "offer file", "offer files"));
     var dl = add(box, "dl", { class: "kv" });
     kv(dl, "region", V.region.snapshot, "mono");
     kv(dl, "as of", R.pricing.as_of, "mono");
@@ -536,8 +553,7 @@
     sourcesCard();
     var ign = R.ignored_providers && R.ignored_providers.length ? " · --ignore-provider " + R.ignored_providers.join(",") +
       ": " + plural((R.ignored || []).length, "resource", "resources") + " left out of the gate" : "";
-    $("foot").textContent = "costgate " + R.version + " · AWS Price List Bulk API snapshot " + V.region.snapshot +
-      " as of " + R.pricing.as_of + " (sha256 " + V.sha256_short + ")" + ign + " · " + V.footer +
+    $("foot").textContent = "costgate " + R.version + " · " + V.snapshots_text + ign + " · " + V.footer +
       " This page makes no network request.";
     controls();
     render();

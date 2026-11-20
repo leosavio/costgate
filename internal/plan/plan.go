@@ -17,6 +17,11 @@ type Plan struct {
 	TerraformVersion string           `json:"terraform_version"`
 	ResourceChanges  []ResourceChange `json:"resource_changes"`
 	Configuration    Configuration    `json:"configuration"`
+	// Variables are the input variables of the root module, with the
+	// values of this plan.
+	Variables map[string]struct {
+		Value any `json:"value"`
+	} `json:"variables"`
 
 	// configKeys maps a resource address without instance keys
 	// ("module.vpc.aws_eip.nat") to its provider_config_key.
@@ -162,16 +167,30 @@ func (p *Plan) ProviderConfigKey(address string) string {
 	return p.configKeys[ConfigAddress(address)]
 }
 
-// ProviderRegion returns the region of a provider configuration when it is
-// a constant in the configuration (region = "us-west-2"). A region from a
-// variable, a local or an environment variable is not in the plan.
+// ProviderRegion returns the region of a provider configuration when the
+// plan states it: a constant (region = "us-west-2"), or a root module
+// variable alone (region = var.region), whose value is in the plan. A region
+// from a local, a module variable, an expression or an environment variable
+// is not in the plan.
 func (p *Plan) ProviderRegion(key string) (string, bool) {
 	pc, ok := p.Configuration.ProviderConfig[key]
 	if !ok {
 		return "", false
 	}
 	expr, _ := pc.Expressions["region"].(map[string]any)
-	r, _ := expr["constant_value"].(string)
+	if r, _ := expr["constant_value"].(string); r != "" {
+		return r, true
+	}
+	refs, _ := expr["references"].([]any)
+	if pc.ModuleAddress != "" || len(refs) != 1 {
+		return "", false
+	}
+	ref, _ := refs[0].(string)
+	name, ok := strings.CutPrefix(ref, "var.")
+	if !ok || name == "" || strings.ContainsAny(name, ".[") {
+		return "", false
+	}
+	r, _ := p.Variables[name].Value.(string)
 	return r, r != ""
 }
 

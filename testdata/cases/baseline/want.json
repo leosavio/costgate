@@ -73,6 +73,14 @@
       }
     ]
   },
+  "snapshots": [
+    {
+      "region": "us-east-1",
+      "as_of": "2026-11-11T15:35:57Z",
+      "sha256": "15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744",
+      "resources": 16
+    }
+  ],
   "totals": {
     "monthly_before": 0.0000,
     "monthly_after": 414.1590,
@@ -116,7 +124,8 @@
         ]
       },
       "delta": 50.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_cloudtrail.org",
@@ -146,7 +155,8 @@
         ]
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_customer_gateway.onprem",
@@ -159,7 +169,8 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_ebs_volume.data",
@@ -187,7 +198,8 @@
         ]
       },
       "delta": 1.6000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_ec2_transit_gateway.hub",
@@ -200,7 +212,8 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_ec2_transit_gateway_vpc_attachment.main",
@@ -243,7 +256,8 @@
         ]
       },
       "delta": 38.5000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_eip.nat",
@@ -271,7 +285,8 @@
         ]
       },
       "delta": 3.6500,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_instance.web",
@@ -327,7 +342,8 @@
         ]
       },
       "delta": 11.8820,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_instance.worker",
@@ -373,7 +389,8 @@
         ]
       },
       "delta": 1.3040,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_kms_key.state",
@@ -402,7 +419,8 @@
         ]
       },
       "delta": 1.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_nat_gateway.main",
@@ -445,7 +463,8 @@
         ]
       },
       "delta": 35.1000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_route53_resolver_endpoint.inbound",
@@ -473,7 +492,8 @@
         ]
       },
       "delta": 182.5000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_route53_zone.private",
@@ -502,7 +522,9 @@
         ]
       },
       "delta": 0.5000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1",
+      "region_assumed": true
     },
     {
       "address": "aws_route53_zone.public",
@@ -531,7 +553,9 @@
         ]
       },
       "delta": 0.5000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1",
+      "region_assumed": true
     },
     {
       "address": "aws_s3_bucket.trail",
@@ -561,7 +585,8 @@
         ]
       },
       "delta": 0.0230,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_security_group.resolver",
@@ -574,7 +599,8 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_subnet.private[0]",
@@ -587,7 +613,8 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_subnet.private[1]",
@@ -600,7 +627,8 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_vpc.main",
@@ -613,7 +641,8 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_vpc_endpoint.s3",
@@ -626,7 +655,8 @@
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_vpc_endpoint.ssm",
@@ -670,7 +700,8 @@
         ]
       },
       "delta": 14.6000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     },
     {
       "address": "aws_vpn_connection.onprem",
@@ -727,7 +758,8 @@
         ]
       },
       "delta": 73.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-east-1"
     }
   ],
   "usage_not_declared": [

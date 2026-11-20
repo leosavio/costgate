@@ -73,6 +73,14 @@
       }
     ]
   },
+  "snapshots": [
+    {
+      "region": "us-east-1",
+      "as_of": "2026-11-11T15:35:57Z",
+      "sha256": "15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744",
+      "resources": 0
+    }
+  ],
   "totals": {
     "monthly_before": 0.0000,
     "monthly_after": 0.0000,
@@ -90,8 +98,8 @@
   "warnings": [
     {
       "code": "region_mismatch",
-      "message": "provider configuration aws deploys to us-west-2 (region taken from the region attribute or ARNs of its resources), but prices are for us-east-1; 4 resources in us-west-2 left unpriced (reason region)",
-      "fix": "rerun with --region us-west-2 (embedded snapshot)"
+      "message": "provider configuration aws deploys to us-west-2 (region taken from the region attribute or ARNs of its resources), and costgate has no price snapshot of us-west-2; 4 resources in us-west-2 left unpriced (reason region)",
+      "fix": "run 'costgate pricing refresh --region us-west-2 --out us-west-2.json.gz', then rerun with --pricing us-west-2.json.gz"
     }
   ],
   "incomplete": true,
@@ -104,12 +112,13 @@
       "before": null,
       "after": {
         "monthly": 0.0000,
-        "unpriced": "resource region us-west-2 (from ARNs of other resources of provider configuration aws) differs from priced region us-east-1",
+        "unpriced": "no price snapshot for resource region us-west-2 (from ARNs of other resources of provider configuration aws)",
         "unpriced_reason": "region",
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": true
+      "blocking": true,
+      "region": "us-west-2"
     },
     {
       "address": "module.eks.module.kms.aws_kms_key.this[0]",
@@ -118,18 +127,19 @@
       "zero_cost": false,
       "before": {
         "monthly": 0.0000,
-        "unpriced": "resource region us-west-2 (from ARN) differs from priced region us-east-1",
+        "unpriced": "no price snapshot for resource region us-west-2 (from ARN)",
         "unpriced_reason": "region",
         "lines": []
       },
       "after": {
         "monthly": 0.0000,
-        "unpriced": "resource region us-west-2 (from ARN) differs from priced region us-east-1",
+        "unpriced": "no price snapshot for resource region us-west-2 (from ARN)",
         "unpriced_reason": "region",
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-west-2"
     },
     {
       "address": "module.vpc.aws_eip.nat[0]",
@@ -138,18 +148,19 @@
       "zero_cost": false,
       "before": {
         "monthly": 0.0000,
-        "unpriced": "resource region us-west-2 (from ARN) differs from priced region us-east-1",
+        "unpriced": "no price snapshot for resource region us-west-2 (from ARN)",
         "unpriced_reason": "region",
         "lines": []
       },
       "after": {
         "monthly": 0.0000,
-        "unpriced": "resource region us-west-2 (from ARN) differs from priced region us-east-1",
+        "unpriced": "no price snapshot for resource region us-west-2 (from ARN)",
         "unpriced_reason": "region",
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-west-2"
     },
     {
       "address": "module.vpc.aws_nat_gateway.this[0]",
@@ -158,18 +169,19 @@
       "zero_cost": false,
       "before": {
         "monthly": 0.0000,
-        "unpriced": "resource region us-west-2 (from ARNs of other resources of provider configuration aws) differs from priced region us-east-1",
+        "unpriced": "no price snapshot for resource region us-west-2 (from ARNs of other resources of provider configuration aws)",
         "unpriced_reason": "region",
         "lines": []
       },
       "after": {
         "monthly": 0.0000,
-        "unpriced": "resource region us-west-2 (from ARNs of other resources of provider configuration aws) differs from priced region us-east-1",
+        "unpriced": "no price snapshot for resource region us-west-2 (from ARNs of other resources of provider configuration aws)",
         "unpriced_reason": "region",
         "lines": []
       },
       "delta": 0.0000,
-      "blocking": false
+      "blocking": false,
+      "region": "us-west-2"
     }
   ],
   "usage_not_declared": []

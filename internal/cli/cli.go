@@ -33,14 +33,30 @@ type Env struct {
 	Stderr  io.Writer
 	// HTTPClient is used by `pricing refresh`; nil means a default client.
 	HTTPClient *http.Client
+	// Embedded returns the built-in snapshot of a region, false when there
+	// is none; nil means the snapshots embedded in the binary. Tests set it
+	// so that the reports do not depend on the weekly price refresh.
+	Embedded func(region string) ([]byte, bool)
+}
+
+func (env Env) embedded(region string) ([]byte, bool) {
+	if env.Embedded != nil {
+		return env.Embedded(region)
+	}
+	if !pricing.Has(region) {
+		return nil, false
+	}
+	b, err := pricing.Snapshot(region)
+	return b, err == nil
 }
 
 const usageText = `costgate projects the monthly AWS cost of a Terraform/OpenTofu plan.
 
 Usage:
   costgate diff --plan <plan.json|-> [flags]
-  costgate pricing refresh [--region us-east-1] [--out pricing/us-east-1.json]
+  costgate pricing refresh [--region us-east-1] [--out pricing/us-east-1.json.gz] [--strict]
   costgate pricing verify [--pricing <file>] [--region <region>]
+  costgate pricing regions
   costgate version
 
 Exit codes: 0 ok, 1 above a ceiling, 2 unpriced resource, 3 usage or input error.
@@ -66,6 +82,8 @@ func Run(args []string, env Env) int {
 			return runRefresh(args[2:], env)
 		case "verify":
 			return runVerify(args[2:], env)
+		case "regions":
+			return runRegions(args[2:], env)
 		}
 	case "version", "--version":
 		fmt.Fprintln(env.Stdout, "costgate", env.Version)
@@ -131,6 +149,94 @@ func (p *providerList) sorted() []string {
 	return slices.Compact(out)
 }
 
+// pathList is a repeatable flag of file paths.
+type pathList struct{ v []string }
+
+func (p *pathList) String() string { return strings.Join(p.v, ",") }
+
+func (p *pathList) Set(s string) error {
+	if s == "" {
+		return errors.New("empty path")
+	}
+	p.v = append(p.v, s)
+	return nil
+}
+
+// snapshotSet holds the --pricing files by region and loads the embedded
+// snapshot of any other region on first use.
+type snapshotSet struct {
+	env   Env
+	files map[string]*catalog.Snapshot
+}
+
+func loadSnapshotFiles(env Env, paths []string) (*snapshotSet, error) {
+	set := &snapshotSet{env: env, files: map[string]*catalog.Snapshot{}}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		snap, err := catalog.Load(data)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		if _, dup := set.files[snap.Region]; dup {
+			return nil, fmt.Errorf("--pricing: two snapshots for region %s", snap.Region)
+		}
+		set.files[snap.Region] = snap
+	}
+	return set, nil
+}
+
+// prices is the estimate.Prices of the set: a --pricing file, else the
+// embedded snapshot, else none.
+func (s *snapshotSet) prices(region string) (*catalog.Snapshot, error) {
+	if snap, ok := s.files[region]; ok {
+		return snap, nil
+	}
+	data, ok := s.env.embedded(region)
+	if !ok {
+		return nil, nil
+	}
+	snap, err := catalog.Load(data)
+	if err != nil {
+		return nil, fmt.Errorf("embedded snapshot of %s: %w", region, err)
+	}
+	return snap, nil
+}
+
+// defaultRegion picks the region of the resources whose region the plan
+// does not state, the caller's choice first: --region; else the region of
+// the only --pricing file; else the only region the plan names, when
+// costgate has its prices; else us-east-1.
+func (s *snapshotSet) defaultRegion(p *plan.Plan, flagRegion string) (string, string, error) {
+	if flagRegion != "" {
+		return flagRegion, estimate.RegionFromFlag, nil
+	}
+	if len(s.files) == 1 {
+		for r := range s.files {
+			return r, estimate.RegionFromFlag, nil
+		}
+	}
+	if rs := estimate.PlanRegions(p); len(rs) == 1 {
+		snap, err := s.prices(rs[0])
+		if err != nil {
+			return "", "", err
+		}
+		if snap != nil {
+			return rs[0], estimate.RegionFromPlan, nil
+		}
+	}
+	return estimate.DefaultRegion, estimate.RegionFromDefault, nil
+}
+
+func noSnapshotError(region string) error {
+	if catalog.RegionSupported(region) {
+		return fmt.Errorf("no price snapshot for region %[1]s; run 'costgate pricing refresh --region %[1]s --out %[1]s.json.gz' and pass --pricing %[1]s.json.gz", region)
+	}
+	return fmt.Errorf("no price snapshot for region %s: the public AWS Price List of this endpoint has no such region (see 'costgate pricing regions'); pass --pricing <snapshot of %s>", region, region)
+}
+
 func loadSnapshot(path, region string) (*catalog.Snapshot, error) {
 	var data []byte
 	var err error
@@ -157,8 +263,9 @@ func runDiff(args []string, env Env) int {
 	fs.SetOutput(env.Stderr)
 	planPath := fs.String("plan", "", "plan JSON from 'terraform show -json <planfile>' ('-' for stdin)")
 	usagePath := fs.String("usage", "", "usage premises file (JSON, schema_version 1)")
-	pricingPath := fs.String("pricing", "", "price snapshot file (default: embedded snapshot of --region)")
-	region := fs.String("region", "us-east-1", "AWS region the plan deploys to")
+	var pricingPaths pathList
+	fs.Var(&pricingPaths, "pricing", "price snapshot file, JSON or .json.gz, used instead of the embedded one of its region (repeatable)")
+	region := fs.String("region", "", "region of the resources whose region the plan does not state (default: the only region the plan names, else us-east-1); every other resource is priced in its own region")
 	format := fs.String("format", "markdown", "stdout format: markdown or json")
 	jsonOut := fs.String("json-out", "", "also write the JSON report to this file")
 	jsonLinesOut := fs.String("json-lines", "", "also write one JSON document per cost line to this file (JSON Lines, for Athena or jq)")
@@ -207,17 +314,28 @@ func runDiff(args []string, env Env) int {
 			return fail(env, err)
 		}
 	}
-	snap, err := loadSnapshot(*pricingPath, *region)
+	snaps, err := loadSnapshotFiles(env, pricingPaths.v)
 	if err != nil {
 		return fail(env, err)
 	}
-	res, err := estimate.Estimate(p, snap, use, estimate.Options{Region: *region, IgnoreProviders: ignore.sorted()})
+	defRegion, regionFrom, err := snaps.defaultRegion(p, *region)
+	if err != nil {
+		return fail(env, err)
+	}
+	defSnap, err := snaps.prices(defRegion)
+	if err != nil {
+		return fail(env, err)
+	}
+	if defSnap == nil {
+		return fail(env, noSnapshotError(defRegion))
+	}
+	res, err := estimate.Estimate(p, snaps.prices, use, estimate.Options{Region: defRegion, RegionFrom: regionFrom, IgnoreProviders: ignore.sorted()})
 	if err != nil {
 		return fail(env, err)
 	}
 	ceil := report.Ceilings{MaxDelta: maxDelta.v, MaxTotal: maxTotal.v}
-	in := report.Input{Version: env.Version, Result: res, Verdict: report.Evaluate(res, ceil), Ceilings: ceil, Pricing: snap,
-		Warnings: report.RegionWarnings(res, pricing.Has)}
+	in := report.Input{Version: env.Version, Result: res, Verdict: report.Evaluate(res, ceil), Ceilings: ceil,
+		Pricing: defSnap, Warnings: report.RegionWarnings(res)}
 
 	md := report.Markdown(in)
 	js, err := report.JSON(in)
@@ -266,31 +384,61 @@ func runDiff(args []string, env Env) int {
 func runRefresh(args []string, env Env) int {
 	fs := flag.NewFlagSet("pricing refresh", flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
-	region := fs.String("region", "us-east-1", "region to extract")
-	out := fs.String("out", "", "output file (default pricing/<region>.json)")
+	region := fs.String("region", "us-east-1", "region to extract (see 'costgate pricing regions')")
+	out := fs.String("out", "", "output file, gzip when it ends in .gz (default pricing/<region>.json.gz)")
 	baseURL := fs.String("base-url", catalog.DefaultBaseURL, "Price List Bulk API base URL")
 	timeout := fs.Duration("timeout", 20*time.Minute, "overall timeout")
+	strict := fs.Bool("strict", false, "fail when a pricing rule has no price in the region (use on us-east-1 to detect an offer format change)")
 	if err := fs.Parse(args); err != nil {
 		return report.ExitUsage
 	}
 	if *out == "" {
-		*out = filepath.Join("pricing", *region+".json")
+		*out = filepath.Join("pricing", *region+".json.gz")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 	f := catalog.Fetcher{BaseURL: *baseURL, Client: env.HTTPClient, UserAgent: "costgate/" + env.Version}
-	snap, err := catalog.Refresh(ctx, f, *region, catalog.Rules)
+	snap, missing, err := catalog.Refresh(ctx, f, *region, catalog.Rules, *strict)
 	if err != nil {
 		return fail(env, err)
 	}
-	data, err := snap.Encode()
+	var data []byte
+	if strings.HasSuffix(*out, ".gz") {
+		data, err = snap.EncodeGzip()
+	} else {
+		data, err = snap.Encode()
+	}
 	if err != nil {
 		return fail(env, err)
 	}
 	if err := os.WriteFile(*out, data, 0o644); err != nil {
 		return fail(env, err)
 	}
+	for _, m := range missing {
+		fmt.Fprintf(env.Stderr, "costgate: %s: no on-demand price for rule %s; resources that need it stay unpriced\n", *region, m)
+	}
 	fmt.Fprintf(env.Stdout, "wrote %s: %d prices, as of %s, sha256 %s\n", *out, len(snap.Prices), snap.AsOf, snap.SHA256)
+	return report.ExitOK
+}
+
+// runRegions prints the regions refresh supports and whether the binary
+// embeds a snapshot of each.
+func runRegions(args []string, env Env) int {
+	fs := flag.NewFlagSet("pricing regions", flag.ContinueOnError)
+	fs.SetOutput(env.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return report.ExitUsage
+	}
+	if fs.NArg() > 0 {
+		return fail(env, fmt.Errorf("unexpected argument %q", fs.Arg(0)))
+	}
+	for _, r := range catalog.Regions() {
+		state := "refresh only"
+		if pricing.Has(r) {
+			state = "embedded"
+		}
+		fmt.Fprintf(env.Stdout, "%s\t%s\n", r, state)
+	}
 	return report.ExitOK
 }
 

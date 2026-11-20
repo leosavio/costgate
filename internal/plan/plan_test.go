@@ -58,3 +58,29 @@ func TestProviderConfigFromConfiguration(t *testing.T) {
 		}
 	}
 }
+
+func TestProviderRegionFromRootVariable(t *testing.T) {
+	doc := `{"format_version": "1.2", "resource_changes": [],
+	  "variables": {"region": {"value": "sa-east-1"}, "tags": {"value": {"a": "b"}}},
+	  "configuration": {
+	    "provider_config": {
+	      "aws": {"name": "aws", "expressions": {"region": {"references": ["var.region"]}}},
+	      "aws.map": {"name": "aws", "alias": "map", "expressions": {"region": {"references": ["var.tags[\"a\"]", "var.tags"]}}},
+	      "aws.obj": {"name": "aws", "alias": "obj", "expressions": {"region": {"references": ["var.tags"]}}},
+	      "aws.local": {"name": "aws", "alias": "local", "expressions": {"region": {"references": ["local.region"]}}},
+	      "aws.unset": {"name": "aws", "alias": "unset", "expressions": {"region": {"references": ["var.missing"]}}},
+	      "module.m:aws": {"name": "aws", "module_address": "module.m", "expressions": {"region": {"references": ["var.region"]}}}
+	    },
+	    "root_module": {}
+	  }}`
+	p, err := Parse(strings.NewReader(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"aws": "sa-east-1", "aws.map": "", "aws.obj": "", "aws.local": "", "aws.unset": "", "module.m:aws": ""}
+	for key, region := range want {
+		if got, ok := p.ProviderRegion(key); got != region || ok != (region != "") {
+			t.Errorf("%s: %q %v, want %q", key, got, ok, region)
+		}
+	}
+}

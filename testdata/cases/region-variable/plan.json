@@ -1,0 +1,71 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.13.4",
+  "variables": {
+    "region": {"value": "eu-west-1"},
+    "name": {"value": "app"}
+  },
+  "resource_changes": [
+    {
+      "address": "aws_instance.app",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "ami": "ami-00000000000000000",
+          "instance_type": "t3.micro",
+          "tenancy": "default",
+          "root_block_device": [{"volume_size": 8, "volume_type": "gp3"}],
+          "ebs_block_device": []
+        },
+        "after_unknown": {"arn": true, "id": true, "root_block_device": [{"iops": true, "throughput": true}]}
+      }
+    },
+    {
+      "address": "aws_eip.app",
+      "mode": "managed",
+      "type": "aws_eip",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"domain": "vpc"},
+        "after_unknown": {"arn": true, "id": true, "public_ip": true}
+      }
+    },
+    {
+      "address": "aws_kms_key.app",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"key_usage": "ENCRYPT_DECRYPT"},
+        "after_unknown": {"arn": true, "id": true, "key_id": true}
+      }
+    }
+  ],
+  "configuration": {
+    "provider_config": {
+      "aws": {
+        "name": "aws",
+        "full_name": "registry.terraform.io/hashicorp/aws",
+        "expressions": {"region": {"references": ["var.region"]}}
+      }
+    },
+    "root_module": {
+      "resources": [
+        {"address": "aws_instance.app", "mode": "managed", "type": "aws_instance", "name": "app", "provider_config_key": "aws"},
+        {"address": "aws_eip.app", "mode": "managed", "type": "aws_eip", "name": "app", "provider_config_key": "aws"},
+        {"address": "aws_kms_key.app", "mode": "managed", "type": "aws_kms_key", "name": "app", "provider_config_key": "aws"}
+      ]
+    }
+  }
+}

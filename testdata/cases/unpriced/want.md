@@ -19,7 +19,7 @@
 | `aws_db_instance.old` | delete | ? | – | ? | unpriced: resource type not in the pricing map |
 | `aws_instance.from_var` | create | – | ? | ? | unpriced: instance_type unknown at plan time |
 | `aws_kms_key.app` | create | – | 1.00 | +1.00 | customer managed key: 1 key-month × $1 = 1.00 (requests not priced) |
-| `aws_nat_gateway.west` | create | – | ? | ? | unpriced: resource region us-west-2 differs from priced region us-east-1 |
+| `aws_nat_gateway.west` | create | – | ? | ? | unpriced: no price snapshot for resource region us-west-2 |
 | `aws_networkfirewall_firewall.inspection` | create | – | ? | ? | unpriced: resource type not in the pricing map |
 | `aws_s3_bucket.logs` | create | – | 0.00 | 0.00 | S3 Standard storage: usage not declared (`gb_per_month`) |
 | `aws_vpc_endpoint.gwlb` | create | – | ? | ? | unpriced: vpc_endpoint_type "GatewayLoadBalancer" is not modeled |
@@ -40,7 +40,7 @@
 | `aws_db_instance.old` | delete | resource type not in the pricing map | no (unchanged or deleted) |
 | `aws_instance.from_var` | create | instance_type unknown at plan time | yes |
 | `aws_lb.legacy` | no-op | resource type not in the pricing map | no (unchanged or deleted) |
-| `aws_nat_gateway.west` | create | resource region us-west-2 differs from priced region us-east-1 | yes |
+| `aws_nat_gateway.west` | create | no price snapshot for resource region us-west-2 | yes |
 | `aws_networkfirewall_firewall.inspection` | create | resource type not in the pricing map | yes |
 | `aws_vpc_endpoint.gwlb` | create | vpc_endpoint_type "GatewayLoadBalancer" is not modeled | yes |
 
