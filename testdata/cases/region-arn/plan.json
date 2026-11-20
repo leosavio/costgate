@@ -1,0 +1,195 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.13.4",
+  "resource_changes": [
+    {
+      "address": "aws_instance.bastion",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "bastion",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "ami": "ami-00000000000000000",
+          "instance_type": "t3.micro",
+          "tenancy": "default",
+          "root_block_device": [
+            {
+              "volume_size": 8,
+              "volume_type": "gp3"
+            }
+          ],
+          "ebs_block_device": []
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true,
+          "root_block_device": [
+            {
+              "iops": true,
+              "throughput": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "address": "module.eks.module.kms.aws_kms_key.this[0]",
+      "module_address": "module.eks.module.kms",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "this",
+      "index": 0,
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "arn": "arn:aws:kms:us-west-2:000000000000:key/00000000-0000-4000-8000-000000000001",
+          "key_id": "00000000-0000-4000-8000-000000000001",
+          "key_usage": "ENCRYPT_DECRYPT"
+        },
+        "after": {
+          "arn": "arn:aws:kms:us-west-2:000000000000:key/00000000-0000-4000-8000-000000000001",
+          "key_id": "00000000-0000-4000-8000-000000000001",
+          "key_usage": "ENCRYPT_DECRYPT"
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.vpc.aws_eip.nat[0]",
+      "module_address": "module.vpc",
+      "mode": "managed",
+      "type": "aws_eip",
+      "name": "nat",
+      "index": 0,
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "allocation_id": "eipalloc-00000000000000001",
+          "arn": "arn:aws:ec2:us-west-2:000000000000:elastic-ip/eipalloc-00000000000000001",
+          "domain": "vpc",
+          "public_ip": "192.0.2.10"
+        },
+        "after": {
+          "allocation_id": "eipalloc-00000000000000001",
+          "arn": "arn:aws:ec2:us-west-2:000000000000:elastic-ip/eipalloc-00000000000000001",
+          "domain": "vpc",
+          "public_ip": "192.0.2.10"
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.vpc.aws_nat_gateway.this[0]",
+      "module_address": "module.vpc",
+      "mode": "managed",
+      "type": "aws_nat_gateway",
+      "name": "this",
+      "index": 0,
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "allocation_id": "eipalloc-00000000000000001",
+          "connectivity_type": "public",
+          "id": "nat-00000000000000001",
+          "subnet_id": "subnet-00000000000000001"
+        },
+        "after": {
+          "allocation_id": "eipalloc-00000000000000001",
+          "connectivity_type": "public",
+          "id": "nat-00000000000000001",
+          "subnet_id": "subnet-00000000000000001"
+        },
+        "after_unknown": {}
+      }
+    }
+  ],
+  "configuration": {
+    "provider_config": {
+      "aws": {
+        "name": "aws",
+        "full_name": "registry.terraform.io/hashicorp/aws",
+        "version_constraint": ">= 5.95.0",
+        "expressions": {
+          "region": {
+            "references": [
+              "local.region"
+            ]
+          }
+        }
+      }
+    },
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_instance.bastion",
+          "mode": "managed",
+          "type": "aws_instance",
+          "name": "bastion",
+          "provider_config_key": "aws",
+          "schema_version": 1
+        }
+      ],
+      "module_calls": {
+        "vpc": {
+          "source": "terraform-aws-modules/vpc/aws",
+          "module": {
+            "resources": [
+              {
+                "address": "aws_eip.nat",
+                "mode": "managed",
+                "type": "aws_eip",
+                "name": "nat",
+                "provider_config_key": "aws",
+                "schema_version": 0
+              },
+              {
+                "address": "aws_nat_gateway.this",
+                "mode": "managed",
+                "type": "aws_nat_gateway",
+                "name": "this",
+                "provider_config_key": "aws",
+                "schema_version": 0
+              }
+            ]
+          }
+        },
+        "eks": {
+          "source": "terraform-aws-modules/eks/aws",
+          "module": {
+            "module_calls": {
+              "kms": {
+                "source": "terraform-aws-modules/kms/aws",
+                "module": {
+                  "resources": [
+                    {
+                      "address": "aws_kms_key.this",
+                      "mode": "managed",
+                      "type": "aws_kms_key",
+                      "name": "this",
+                      "provider_config_key": "aws",
+                      "schema_version": 0
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

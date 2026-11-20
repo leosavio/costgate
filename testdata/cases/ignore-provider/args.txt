@@ -1,0 +1,1 @@
+--ignore-provider helm,kubectl --ignore-provider kubernetes --max-monthly-delta 10

@@ -2,8 +2,8 @@
   "schema_version": 2,
   "region": "us-east-1",
   "currency": "USD",
-  "as_of": "2026-11-03T00:09:47Z",
-  "sha256": "cbfe2a28af240aa203cf7ef20f87e2ad41c659d0ef1e0abbaeca700b6f74f273",
+  "as_of": "2026-11-11T15:35:57Z",
+  "sha256": "15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744",
   "sources": [
     {
       "service": "AWSCertificateManager",
@@ -25,6 +25,13 @@
       "version": "20261029175634",
       "publication_date": "2026-10-29T17:56:34Z",
       "path": "/offers/v1.0/aws/AmazonEC2/20261029175634/us-east-1/index.csv"
+    },
+    {
+      "service": "AmazonEKS",
+      "scope": "region",
+      "version": "20261111153557",
+      "publication_date": "2026-11-11T15:35:57Z",
+      "path": "/offers/v1.0/aws/AmazonEKS/20261111153557/us-east-1/index.csv"
     },
     {
       "service": "AmazonRoute53",
@@ -143,6 +150,26 @@
       "service_name": "Amazon Elastic Compute Cloud",
       "location": "US East (N. Virginia)"
     },
+    "AmazonEC2|EBS:VolumeP-IOPS.gp3|": {
+      "sku": "7Q58NR58VQEASA4W",
+      "unit": "IOPS-Mo",
+      "usd": "0.0050000000",
+      "description": "$0.005 per provisioned IOPS-month of gp3 - US East (N. Virginia)",
+      "rate_code": "7Q58NR58VQEASA4W.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "EBS:VolumeP-IOPS.gp3",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
+    },
+    "AmazonEC2|EBS:VolumeP-Throughput.gp3|": {
+      "sku": "SQUFRQX4K92S4SBB",
+      "unit": "GiBps-mo",
+      "usd": "40.9600000000",
+      "description": "$0.04 per provisioned MiBps-month of gp3 - US East (N. Virginia)",
+      "rate_code": "SQUFRQX4K92S4SBB.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "EBS:VolumeP-Throughput.gp3",
+      "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
+    },
     "AmazonEC2|EBS:VolumeUsage.gp2|": {
       "sku": "HY3BZPP2B6K8MSJF",
       "unit": "GB-Mo",
@@ -211,6 +238,56 @@
       "rate_code": "M2YSHUBETB3JX4M4.JRTCKXETXF.6YS6EN2CT7",
       "usage_type": "NatGateway-Hours",
       "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
+    },
+    "AmazonEKS|AmazonEKS-Hours:extendedSupport|ExtendedSupport": {
+      "sku": "M7977BSVFGDUJZ67",
+      "unit": "hours",
+      "usd": "0.5000000000",
+      "description": "Amazon EKS extended support usage in US East (N. Virginia)",
+      "rate_code": "M7977BSVFGDUJZ67.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-AmazonEKS-Hours:extendedSupport",
+      "service_name": "Amazon Elastic Container Service for Kubernetes",
+      "location": "US East (N. Virginia)"
+    },
+    "AmazonEKS|AmazonEKS-Hours:perCluster|CreateOperation": {
+      "sku": "ZYWMR684YSMFHWEU",
+      "unit": "Hours",
+      "usd": "0.1000000000",
+      "description": "Amazon EKS cluster usage in US East (N. Virginia)",
+      "rate_code": "ZYWMR684YSMFHWEU.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-AmazonEKS-Hours:perCluster",
+      "service_name": "Amazon Elastic Container Service for Kubernetes",
+      "location": "US East (N. Virginia)"
+    },
+    "AmazonEKS|EKS-Auto:c6a.xlarge-management-hours|EKSAutoUsage": {
+      "sku": "G2MWUDHPEB34JGP8",
+      "unit": "hours",
+      "usd": "0.0183600000",
+      "description": "$0.01836 per hour for EKS Auto Mode management of c6a.xlarge in US East (N. Virginia)",
+      "rate_code": "G2MWUDHPEB34JGP8.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "EKS-Auto:c6a.xlarge-management-hours",
+      "service_name": "Amazon Elastic Container Service for Kubernetes",
+      "location": "US East (N. Virginia)"
+    },
+    "AmazonEKS|EKS-Auto:m5.large-management-hours|EKSAutoUsage": {
+      "sku": "UCWT4GVY8C36VC4D",
+      "unit": "hours",
+      "usd": "0.0115200000",
+      "description": "$0.01152 per hour for EKS Auto Mode management of m5.large in US East (N. Virginia)",
+      "rate_code": "UCWT4GVY8C36VC4D.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "EKS-Auto:m5.large-management-hours",
+      "service_name": "Amazon Elastic Container Service for Kubernetes",
+      "location": "US East (N. Virginia)"
+    },
+    "AmazonEKS|EKS-Auto:m7g.large-management-hours|EKSAutoUsage": {
+      "sku": "3VD4G6MNTAHUNRBM",
+      "unit": "hours",
+      "usd": "0.0097900000",
+      "description": "$0.00979 per hour for EKS Auto Mode management of m7g.large in US East (N. Virginia)",
+      "rate_code": "3VD4G6MNTAHUNRBM.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "EKS-Auto:m7g.large-management-hours",
+      "service_name": "Amazon Elastic Container Service for Kubernetes",
       "location": "US East (N. Virginia)"
     },
     "AmazonRoute53|HostedZone|": {

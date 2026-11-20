@@ -28,7 +28,7 @@ flowchart LR
   subgraph prices["Prices: weekly, in this repository"]
     direction TB
     api["AWS Price List Bulk API<br/>public files, no credential"] --> refresh["costgate pricing refresh"]
-    refresh --> snap["pricing/us-east-1.json<br/>schema_version 2, sha256"]
+    refresh --> snap["pricing/us-east-1.json, us-west-2.json<br/>schema_version 2, sha256"]
     snap --> pr["pull request opened by<br/>refresh-pricing.yml, reviewed"]
     pr --> bin["costgate release<br/>snapshot embedded in the binary"]
   end
@@ -138,8 +138,9 @@ costgate diff --plan - --format json < plan.json
 | `--usage` | none | usage premises file (below) |
 | `--max-monthly-delta` | no ceiling | exit 1 if `after − before` > value (USD/month) |
 | `--max-monthly-total` | no ceiling | exit 1 if the total after the change > value; with an unpriced resource, exit 2 |
-| `--region` | `us-east-1` | pricing region; the embedded snapshot covers us-east-1 only |
+| `--region` | `us-east-1` | pricing region; snapshots of `us-east-1` and `us-west-2` are embedded ([Regions](#regions)) |
 | `--pricing` | embedded | another snapshot (written by `pricing refresh`) |
+| `--ignore-provider` | none | comma-separated providers (`helm,kubectl,kubernetes`) left out of the estimate and the gate, and listed as ignored ([Providers other than AWS](#providers-other-than-aws)) |
 | `--format` | `markdown` | `markdown` or `json` on stdout |
 | `--markdown-out`, `--json-out` | — | also write to a file |
 | `--json-lines` | — | also write one JSON document per cost line to a file ([JSON Lines](#json-lines)) |
@@ -155,6 +156,43 @@ An unpriced resource in `no-op` or `delete` is reported but does not block: its 
 positive, and blocking would force an approval on every PR of a stack with a legacy resource
 outside the map. Approval by label (`cost-approved`) belongs to the consumer; the tool only
 returns the code. Example job: [docs/integration/github-actions.md](docs/integration/github-actions.md).
+
+Each unpriced side carries a reason code in the JSON report (`unpriced_reason`): `provider` (not
+the AWS provider), `type` (AWS type not in the pricing map), `region` (the resource is in another
+region than the snapshot), `config` (a configuration not modeled, or a value unknown at plan time)
+or `price` (the snapshot has no price for the key, such as an instance type it does not list).
+
+### Regions
+
+A snapshot holds the prices of one region, so costgate needs the region of each resource. It
+takes the first of:
+
+1. the resource's `region` attribute (AWS provider 6.x adds it to every resource);
+2. the region of its provider configuration, when the plan has it as a constant
+   (`configuration.provider_config[...].expressions.region.constant_value`, aliases included);
+3. the region in the resource's ARN (`arn:<partition>:<service>:<region>:...`; global services
+   such as IAM or S3 have an empty region and are skipped);
+4. the region every other resource of the same provider configuration names through 1 or 3,
+   when they all agree. This covers a resource without ARN (a NAT gateway) in a configuration
+   with `region = var.region` or `local.region`, which the plan does not resolve.
+
+A resource found in another region than `--region` is **unpriced** with reason `region` (exit 2
+when it is created or changed, reported only for `no-op` and `delete`), instead of being priced
+with the SKUs of the wrong region. When a provider configuration of the plan deploys to another
+region, the Markdown, the JSON (`warnings`) and the JSON Lines (`kind: costgate.warning`) start
+with a `region_mismatch` warning that names the fix: `--region us-west-2` with the embedded
+snapshot, or `pricing refresh --region <r>` and `--pricing` for a region that is not embedded.
+
+### Providers other than AWS
+
+Resources of other providers (`helm_release`, `kubectl_manifest`, `kubernetes_*`...) have no AWS
+price and are unpriced with reason `provider`, distinct from an AWS type outside the map (`type`).
+By default they block like any unpriced resource. `--ignore-provider helm,kubectl,kubernetes`
+leaves them out of the estimate and the gate; the report lists every ignored resource (Markdown
+section and footer, JSON `ignored_providers` and `ignored`, JSON Lines `kind: costgate.ignored`).
+An entry matches the provider source address or its last segments (`helm`, `hashicorp/helm`,
+`registry.terraform.io/hashicorp/helm`). The AWS provider cannot be ignored (exit 3). Types with
+no charge, such as `random_*` and `null_resource`, stay in the zero-cost list either way.
 
 ## Usage premises
 
@@ -181,12 +219,16 @@ versioned with the stack ([example](examples/usage.json)):
 | `events_per_month` | not declared (0, flagged) | paid CloudTrail events (the first copy of management events is free) |
 | `az_count` | 2 | interface endpoint subnets when the plan does not know the count |
 | `root_volume_gb` | 8 | instance root volume when the plan does not know the size |
+| `extended_support_hours` | not declared (no line) | hours per month an `aws_eks_cluster` runs a Kubernetes version in extended support (0–744). costgate embeds no version calendar |
+| `auto_mode_instance_hours` | not declared (0, flagged) | EKS Auto Mode: instance hours per month by instance type, `{"c6a.xlarge": 1460}`; priced with the Auto Mode management fee of each type |
 
 Precedence, field by field: `resources["address[index]"]` > `resources["address"]` (without
 `[index]`) > `types[type]` > `defaults` > built-in. A missing volume premise counts as 0 and is
 listed in the report.
 
-## Covered resources (us-east-1 snapshot of 2026-11-03)
+## Covered resources (us-east-1 snapshot of 2026-11-20)
+
+The us-west-2 snapshot has the same SKUs with the `USW2-` prefix in the usage type.
 
 | Terraform type | Formula | SKU (usage type, operation) | Price (USD) |
 |---|---|---|---|
@@ -199,8 +241,10 @@ listed in the report.
 | `aws_route53_zone` | per zone-month | `HostedZone` (global offer) | 0.50 (first 25 zones tier) |
 | `aws_route53_resolver_endpoint` | 730 h × `ip_address` count (min. 2) | `USE1-ResolverNetworkInterface` | 0.125/h per ENI |
 | `aws_kms_key`, `aws_kms_replica_key`, `aws_kms_external_key`, `aws_kms_replica_external_key` | per key-month | `us-east-1-KMS-Keys` | 1.00 |
-| `aws_instance`, `aws_spot_instance_request` | 730 h × instance price (Spot with discount) + root + `ebs_block_device` | `BoxUsage:<type>` (`RunInstances`, Linux, shared) — 1,392 types, x86 and Graviton | e.g. t3.micro 0.0104/h, t4g.micro 0.0084/h |
+| `aws_instance`, `aws_spot_instance_request` | 730 h × instance price (Spot with discount) + root + `ebs_block_device` | `BoxUsage:<type>` (`RunInstances`, Linux, shared) — 1,396 types, x86 and Graviton | e.g. t3.micro 0.0104/h, t4g.micro 0.0084/h |
 | `aws_ebs_volume`, instance volumes | GB-month | `EBS:VolumeUsage[.gp2/.gp3/.st1/.sc1]` | gp3 0.08, gp2 0.10, st1 0.045, sc1 0.015, standard 0.05 |
+| gp3 volumes above the baseline | IOPS above 3000; (MiB/s above 125) ÷ 1024 | `EBS:VolumeP-IOPS.gp3` (IOPS-month), `EBS:VolumeP-Throughput.gp3` (GiBps-month) | 0.005 per IOPS; 40.96 per GiBps (0.04 per MiB/s) |
+| `aws_eks_cluster` | 730 h control plane; + extended support hours and Auto Mode fee (premises) | `USE1-AmazonEKS-Hours:perCluster` (`CreateOperation`); `USE1-AmazonEKS-Hours:extendedSupport` (`ExtendedSupport`); `EKS-Auto:<type>-management-hours` (`EKSAutoUsage`) — 1,261 types | 0.10/h; + 0.50/h; c6a.xlarge 0.01836/h |
 | `aws_s3_bucket` | GB-month (premise) | `TimedStorage-ByteHrs` | 0.023 (first 50 TB) |
 | `aws_cloudtrail` | paid events (premise) | `USE1-PaidEventsRecorded` | 0.00002 per event |
 | `aws_acmpca_certificate_authority` | per CA-month by `usage_mode` | `USE1-PaidPrivateCA`, `USE1-ShortLivedCertificatePrivateCA` | 400 / 50 |
@@ -211,9 +255,18 @@ Identity Center, RAM, `aws_ec2_transit_gateway`, `aws_route53_record`, S3 bucket
 `random_*`, `time_*`…) are in the zero-cost list in
 [`internal/estimate/resources.go`](internal/estimate/resources.go). Any other type is
 **unpriced** (exit 2 when created or changed). Deliberately unpriced as well: regional NAT
-gateway, `GatewayLoadBalancer`/`Resource` endpoints, EBS io1/io2 and gp3 above 3000 IOPS or
-125 MiB/s, dedicated tenancy, `large` VPN tunnels, CloudTrail with data events or Insights,
-resources whose `region` differs from the priced one, and `instance_type` unknown at plan time.
+gateway, `GatewayLoadBalancer`/`Resource` endpoints, EBS io1/io2, dedicated tenancy, `large` VPN
+tunnels, CloudTrail with data events or Insights, EKS local clusters on Outposts and provisioned
+control plane tiers (`control_plane_scaling_config.tier` other than `standard`), resources in
+another region than the priced one ([Regions](#regions)), and `instance_type` unknown at plan time.
+
+`aws_eks_cluster` prices the control plane at the standard support rate. The plan does not say
+whether the Kubernetes version is in extended support on the billing dates, so the extended
+support line exists only when `extended_support_hours` is declared. With
+`compute_config.enabled = true` (EKS Auto Mode), AWS also bills a management fee per instance
+hour of the nodes Auto Mode launches, which the plan does not carry: without
+`auto_mode_instance_hours` the line counts 0 and is listed as an undeclared premise, as NAT data
+without `gb_per_month`. The EC2 cost of those nodes is not estimated.
 
 ## Example PR comment
 
@@ -298,14 +351,25 @@ Each element of `resources[].before.lines` and `resources[].after.lines` is one 
 
 | `billing_rule` | AWS bills | Lines |
 |---|---|---|
-| `fixed_hourly` | per hour the resource exists | NAT gateway, public IPv4, interface endpoint, TGW attachments, VPN, Resolver ENIs, on-demand instances |
-| `fixed_monthly` | per month the resource exists | hosted zone, KMS key, Private CA, provisioned EBS GB-month |
-| `usage` | by traffic, stored data, events or market price; the quantity or the price is a premise | data processed, S3 storage, CloudTrail events, Spot instances |
+| `fixed_hourly` | per hour the resource exists | NAT gateway, public IPv4, interface endpoint, TGW attachments, VPN, Resolver ENIs, on-demand instances, EKS control plane |
+| `fixed_monthly` | per month the resource exists | hosted zone, KMS key, Private CA, provisioned EBS GB-month, gp3 IOPS and throughput above the baseline |
+| `usage` | by traffic, stored data, events or market price; the quantity or the price is a premise | data processed, S3 storage, CloudTrail events, Spot instances, EKS extended support, EKS Auto Mode fee |
 
 `fixed_*` lines are the ones expected to match the bill by SKU and quantity. The projection uses
 730 h/month; the bill uses the hours of the calendar month, so monthly amounts differ even when
 the line matches. With a snapshot written by costgate 0.1.x (`schema_version` 1), `usage_type`
-and `rate_code` are empty strings.
+and `rate_code` are empty strings. An undeclared EKS Auto Mode fee is the one line without a
+price key: its SKU depends on the instance type the premise names, so `price_key`, `sku`,
+`usage_type`, `rate_code` and `billing_description` are empty and `monthly` is 0.
+
+Fields added after 0.2.0 (unreleased), all absent when they do not apply, so a report without
+them is byte for byte the 0.2.0 one:
+
+| Field | Meaning |
+|---|---|
+| `resources[].before.unpriced_reason`, `resources[].after.unpriced_reason` | `provider`, `type`, `region`, `config` or `price` ([Usage](#usage)) |
+| `warnings[]` | `{code, message, fix}`; code `region_mismatch` ([Regions](#regions)) |
+| `ignored_providers`, `ignored[]` | with `--ignore-provider`: the list given, and `{address, type, provider, action}` of each resource left out |
 
 ### JSON Lines
 
@@ -314,8 +378,11 @@ and `rate_code` are empty strings.
 ([Athena: JSON](https://docs.aws.amazon.com/athena/latest/ug/parsing-json-data.html)) and `jq -c`
 produces. Each document is standalone: it repeats `schema_version`, the costgate version, the
 snapshot date and hash, and the resource address, type and action. Unpriced and zero-cost
-resources have no cost line; they are only in the JSON report. One line of
-`testdata/cases/changes` with the embedded snapshot:
+resources have no cost line; they are only in the JSON report. Two other kinds appear only when
+they apply: `costgate.warning` documents come first (one per warning) and `costgate.ignored`
+documents last (one per resource of an `--ignore-provider` provider), so a query over cost
+lines filters on `kind = 'costgate.line'`. One line of `testdata/cases/changes` with the
+embedded snapshot:
 
 ```json
 {"schema_version":1,"kind":"costgate.line","tool":"costgate","version":"0.2.0","region":"us-east-1","currency":"USD","pricing_as_of":"2026-11-03T00:09:47Z","pricing_sha256":"b27de59b08836c188cfa5bb1c758b2246392b90280def70f26d1c49f27daa0be","address":"module.dns.aws_route53_zone.this[\"example.com\"]","type":"aws_route53_zone","action":"no-op","side":"after","name":"hosted zone","price_key":"AmazonRoute53|HostedZone|","sku":"KVPGEJE88UW8S779","usage_type":"HostedZone","rate_code":"KVPGEJE88UW8S779.JRTCKXETXF.G2A93NZ7DT","billing_description":"$0.50 per Hosted Zone for the first 25 Hosted Zones","billing_rule":"fixed_monthly","unit_price":0.5,"quantity":1,"unit":"zone-month","monthly":0.5000,"declared":true,"note":"first-25-zones tier"}
@@ -324,16 +391,24 @@ resources have no cost line; they are only in the JSON report. One line of
 ## Refreshing prices
 
 ```sh
-costgate pricing refresh --region us-east-1 --out pricing/us-east-1.json   # public HTTP, no credential
-costgate pricing verify --pricing pricing/us-east-1.json
+costgate pricing refresh --region us-west-2 --out pricing/us-west-2.json   # public HTTP, no credential
+costgate pricing verify                                                     # every embedded snapshot
+costgate pricing verify --pricing pricing/us-west-2.json                    # one file
 ```
 
 The refresh reads `offers/v1.0/aws/index.json`, downloads the CSV of every mapped service (the
 EC2 one is ~300 MB and is streamed) and keeps only the SKUs of the rules in
 [`internal/catalog/rules.go`](internal/catalog/rules.go), with `schema_version`, the version and
 date of each offer file, and a `sha256`. A rule that matches no SKU, or two SKUs with different
-prices, fails the refresh. The `refresh-pricing.yml` workflow runs every Monday and opens a PR
-when a price changes.
+prices, fails the refresh. It knows the usage type prefixes of us-east-1, us-east-2, us-west-1
+and us-west-2; the binary embeds the snapshots of us-east-1 and us-west-2.
+
+The `refresh-pricing.yml` workflow runs every Monday, refreshes every embedded snapshot and opens
+a PR only when a price changed: [`scripts/pricing-diff.sh`](scripts/pricing-diff.sh) compares the
+`prices` maps with `main`, so a refresh that only moves `as_of`, `sha256` or the offer file
+versions opens nothing (a rule change shows up as added or removed keys). Every refresh uses one
+rolling branch, `pricing/refresh`, which the workflow rewrites and whose open PR it updates, with
+the list of changed keys per region in the PR body.
 
 The snapshot is `schema_version` 2 since costgate 0.2.0: each price also keeps the `rate_code`,
 the raw `usage_type`, the `service_name` and `location` of the offer file, and the tiers after
@@ -381,7 +456,9 @@ summary and a separate job (the only one with `actions: write`) deletes it.
   1 PB). The snapshot keeps the later tiers, and the bill may charge one of them because AWS
   counts the tier across the whole organization; compare `rate_code` with `pricing_rate_code`.
 - No data transfer between AZs/regions/internet, requests (KMS, S3, Route 53 queries),
-  certificates issued by the Private CA, or provisioned IOPS.
+  certificates issued by the Private CA, or io1/io2 provisioned IOPS.
+- Nodes that EKS Auto Mode or Karpenter launch are not in the plan: their EC2 and EBS cost is not
+  estimated, and their Auto Mode fee only through `auto_mode_instance_hours`.
 - Linux on shared tenancy only; Windows/RHEL/SUSE AMIs are priced as Linux (the plan does not say
   which OS the AMI runs).
 - When the plan does not know an endpoint's subnet list (`subnet_ids` from another resource),
@@ -389,7 +466,11 @@ summary and a separate job (the only one with `actions: write`) deletes it.
   `aws_autoscaling_group` is unpriced.
 - Per-resource values are rounded for display; totals use the exact sum, so `after − before` of a
   row may differ by 0.01 from its Delta column.
-- Only us-east-1 is versioned.
+- us-east-1 and us-west-2 are embedded; other regions need `pricing refresh` (us-east-2 and
+  us-west-1 only) and `--pricing`. One run prices one region: a plan that spans regions needs one
+  run per region, and each run reports the resources of the other regions as
+  `unpriced_reason: region` (exit 2 when they are created or changed), so combine the runs, for
+  example by filtering on `unpriced_reason`.
 
 ## Development
 

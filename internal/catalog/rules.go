@@ -78,6 +78,15 @@ var Rules = []Rule{
 	{Service: "AmazonEC2", Scope: ScopeRegion, UsageType: "EBS:VolumeUsage.gp3", Operation: ""},
 	{Service: "AmazonEC2", Scope: ScopeRegion, UsageType: "EBS:VolumeUsage.st1", Operation: ""},
 	{Service: "AmazonEC2", Scope: ScopeRegion, UsageType: "EBS:VolumeUsage.sc1", Operation: ""},
+	// gp3 IOPS above 3000 (IOPS-Mo) and throughput above 125 MiB/s (GiBps-mo).
+	{Service: "AmazonEC2", Scope: ScopeRegion, UsageType: "EBS:VolumeP-IOPS.gp3", Operation: ""},
+	{Service: "AmazonEC2", Scope: ScopeRegion, UsageType: "EBS:VolumeP-Throughput.gp3", Operation: ""},
+
+	// EKS: control plane hour, extended support hour, Auto Mode management
+	// fee per instance type (EKS-Auto:<type>-management-hours).
+	{Service: "AmazonEKS", Scope: ScopeRegion, UsageType: "AmazonEKS-Hours:perCluster", Operation: "CreateOperation"},
+	{Service: "AmazonEKS", Scope: ScopeRegion, UsageType: "AmazonEKS-Hours:extendedSupport", Operation: "ExtendedSupport"},
+	{Service: "AmazonEKS", Scope: ScopeRegion, UsageType: "EKS-Auto:", UsagePrefix: true, Operation: "EKSAutoUsage"},
 
 	// VPC: public IPv4, interface endpoints, Transit Gateway, Site-to-Site VPN.
 	{Service: "AmazonVPC", Scope: ScopeRegion, UsageType: "PublicIPv4:InUseAddress", Operation: ""},

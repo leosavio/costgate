@@ -23,14 +23,19 @@ func TestRefreshFiltersOnDemandLinuxShared(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]string{
-		Key("AmazonEC2", "BoxUsage:t3.micro", "RunInstances"):         "0.0104000000",
-		Key("AmazonEC2", "BoxUsage:t4g.micro", "RunInstances"):        "0.0084000000",
-		Key("AmazonEC2", "NatGateway-Hours", "NatGateway"):            "0.0450000000",
-		Key("AmazonVPC", "PublicIPv4:InUseAddress", ""):               "0.0050000000",
-		Key("AmazonVPC", "TransitGateway-Hours", "TransitGatewayVPC"): "0.0500000000",
-		Key("AmazonRoute53", "HostedZone", ""):                        "0.5000000000",
-		Key("awskms", "KMS-Keys", ""):                                 "1.0000000000",
-		Key("AmazonS3", "TimedStorage-ByteHrs", ""):                   "0.0230000000",
+		Key("AmazonEC2", "BoxUsage:t3.micro", "RunInstances"):                    "0.0104000000",
+		Key("AmazonEC2", "BoxUsage:t4g.micro", "RunInstances"):                   "0.0084000000",
+		Key("AmazonEC2", "NatGateway-Hours", "NatGateway"):                       "0.0450000000",
+		Key("AmazonVPC", "PublicIPv4:InUseAddress", ""):                          "0.0050000000",
+		Key("AmazonVPC", "TransitGateway-Hours", "TransitGatewayVPC"):            "0.0500000000",
+		Key("AmazonRoute53", "HostedZone", ""):                                   "0.5000000000",
+		Key("awskms", "KMS-Keys", ""):                                            "1.0000000000",
+		Key("AmazonS3", "TimedStorage-ByteHrs", ""):                              "0.0230000000",
+		Key("AmazonEC2", "EBS:VolumeP-IOPS.gp3", ""):                             "0.0050000000",
+		Key("AmazonEC2", "EBS:VolumeP-Throughput.gp3", ""):                       "40.9600000000",
+		Key("AmazonEKS", "AmazonEKS-Hours:perCluster", "CreateOperation"):        "0.1000000000",
+		Key("AmazonEKS", "AmazonEKS-Hours:extendedSupport", "ExtendedSupport"):   "0.5000000000",
+		Key("AmazonEKS", "EKS-Auto:c6a.xlarge-management-hours", "EKSAutoUsage"): "0.0183600000",
 	}
 	for k, usd := range want {
 		if got := snap.Prices[k].USD; got != usd {
@@ -45,7 +50,16 @@ func TestRefreshFiltersOnDemandLinuxShared(t *testing.T) {
 	if snap.Prices[Key("AmazonRoute53", "HostedZone", "")].TierEnd != "25" {
 		t.Error("hosted zone first tier end not recorded")
 	}
-	if snap.AsOf != "2026-11-03T00:09:47Z" {
+	for k := range snap.Prices {
+		if strings.HasPrefix(k, "AmazonEKS|") && strings.Contains(k, "Outposts") || strings.Contains(k, "Fargate") {
+			t.Errorf("EKS price outside the rules leaked: %s", k)
+		}
+	}
+	if eks := snap.Prices[Key("AmazonEKS", "AmazonEKS-Hours:perCluster", "CreateOperation")]; eks.UsageType != "USE1-AmazonEKS-Hours:perCluster" {
+		t.Errorf("eks usage type %q", eks.UsageType)
+	}
+	// The newest offer file of the mirror is AmazonEKS 20261111153557.
+	if snap.AsOf != "2026-11-11T15:35:57Z" {
 		t.Errorf("as_of = %s", snap.AsOf)
 	}
 	data, err := snap.Encode()

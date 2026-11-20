@@ -1,0 +1,299 @@
+{
+  "schema_version": 1,
+  "tool": "costgate",
+  "version": "test",
+  "region": "us-east-1",
+  "currency": "USD",
+  "pricing": {
+    "as_of": "2026-11-11T15:35:57Z",
+    "sha256": "15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744",
+    "sources": [
+      {
+        "service": "AWSCertificateManager",
+        "scope": "region",
+        "version": "20261022154217",
+        "publication_date": "2026-10-22T15:42:17Z",
+        "path": "/offers/v1.0/aws/AWSCertificateManager/20261022154217/us-east-1/index.csv"
+      },
+      {
+        "service": "AWSCloudTrail",
+        "scope": "region",
+        "version": "20261102172009",
+        "publication_date": "2026-11-02T17:20:09Z",
+        "path": "/offers/v1.0/aws/AWSCloudTrail/20261102172009/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonEC2",
+        "scope": "region",
+        "version": "20261029175634",
+        "publication_date": "2026-10-29T17:56:34Z",
+        "path": "/offers/v1.0/aws/AmazonEC2/20261029175634/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonEKS",
+        "scope": "region",
+        "version": "20261111153557",
+        "publication_date": "2026-11-11T15:35:57Z",
+        "path": "/offers/v1.0/aws/AmazonEKS/20261111153557/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonRoute53",
+        "scope": "global",
+        "version": "20260911124504",
+        "publication_date": "2026-09-11T12:45:04Z",
+        "path": "/offers/v1.0/aws/AmazonRoute53/current/index.csv"
+      },
+      {
+        "service": "AmazonRoute53",
+        "scope": "region",
+        "version": "20260911124504",
+        "publication_date": "2026-09-11T12:45:04Z",
+        "path": "/offers/v1.0/aws/AmazonRoute53/20260911124504/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonS3",
+        "scope": "region",
+        "version": "20261015173540",
+        "publication_date": "2026-10-15T17:35:40Z",
+        "path": "/offers/v1.0/aws/AmazonS3/20261015173540/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonVPC",
+        "scope": "region",
+        "version": "20261103000947",
+        "publication_date": "2026-11-03T00:09:47Z",
+        "path": "/offers/v1.0/aws/AmazonVPC/20261103000947/us-east-1/index.csv"
+      },
+      {
+        "service": "awskms",
+        "scope": "region",
+        "version": "20261026201814",
+        "publication_date": "2026-10-26T20:18:14Z",
+        "path": "/offers/v1.0/aws/awskms/20261026201814/us-east-1/index.csv"
+      }
+    ]
+  },
+  "totals": {
+    "monthly_before": 8.0000,
+    "monthly_after": 242.5680,
+    "monthly_delta": 234.5680
+  },
+  "ceilings": {
+    "max_monthly_delta": 200.0000,
+    "max_monthly_total": null
+  },
+  "status": "over_ceiling",
+  "exit_code": 1,
+  "reasons": [
+    "monthly delta above --max-monthly-delta"
+  ],
+  "incomplete": false,
+  "resources": [
+    {
+      "address": "aws_ebs_volume.logs",
+      "type": "aws_ebs_volume",
+      "action": "update",
+      "zero_cost": false,
+      "before": {
+        "monthly": 8.0000,
+        "lines": [
+          {
+            "name": "EBS volume (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp3|",
+            "sku": "JG3KUJMBRGHV3N8G",
+            "usage_type": "EBS:VolumeUsage.gp3",
+            "rate_code": "JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 0.08,
+            "quantity": 100,
+            "unit": "GB-month",
+            "monthly": 8.0000,
+            "declared": true
+          }
+        ]
+      },
+      "after": {
+        "monthly": 13.0000,
+        "lines": [
+          {
+            "name": "EBS volume (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp3|",
+            "sku": "JG3KUJMBRGHV3N8G",
+            "usage_type": "EBS:VolumeUsage.gp3",
+            "rate_code": "JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 0.08,
+            "quantity": 100,
+            "unit": "GB-month",
+            "monthly": 8.0000,
+            "declared": true
+          },
+          {
+            "name": "EBS volume throughput above 125 MiB/s (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeP-Throughput.gp3|",
+            "sku": "SQUFRQX4K92S4SBB",
+            "usage_type": "EBS:VolumeP-Throughput.gp3",
+            "rate_code": "SQUFRQX4K92S4SBB.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.04 per provisioned MiBps-month of gp3 - US East (N. Virginia)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 40.96,
+            "quantity": 0.1220703125,
+            "unit": "GiBps-month",
+            "monthly": 5.0000,
+            "declared": true,
+            "note": "250 MiB/s provisioned, 125 included; 125 MiB/s ÷ 1024"
+          }
+        ]
+      },
+      "delta": 5.0000,
+      "blocking": false
+    },
+    {
+      "address": "aws_ebs_volume.shuffle",
+      "type": "aws_ebs_volume",
+      "action": "create",
+      "zero_cost": false,
+      "before": null,
+      "after": {
+        "monthly": 130.0000,
+        "lines": [
+          {
+            "name": "EBS volume (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp3|",
+            "sku": "JG3KUJMBRGHV3N8G",
+            "usage_type": "EBS:VolumeUsage.gp3",
+            "rate_code": "JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 0.08,
+            "quantity": 1000,
+            "unit": "GB-month",
+            "monthly": 80.0000,
+            "declared": true
+          },
+          {
+            "name": "EBS volume IOPS above 3000 (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeP-IOPS.gp3|",
+            "sku": "7Q58NR58VQEASA4W",
+            "usage_type": "EBS:VolumeP-IOPS.gp3",
+            "rate_code": "7Q58NR58VQEASA4W.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.005 per provisioned IOPS-month of gp3 - US East (N. Virginia)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 0.005,
+            "quantity": 3000,
+            "unit": "IOPS-month",
+            "monthly": 15.0000,
+            "declared": true,
+            "note": "6000 IOPS provisioned, 3000 included"
+          },
+          {
+            "name": "EBS volume throughput above 125 MiB/s (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeP-Throughput.gp3|",
+            "sku": "SQUFRQX4K92S4SBB",
+            "usage_type": "EBS:VolumeP-Throughput.gp3",
+            "rate_code": "SQUFRQX4K92S4SBB.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.04 per provisioned MiBps-month of gp3 - US East (N. Virginia)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 40.96,
+            "quantity": 0.8544921875,
+            "unit": "GiBps-month",
+            "monthly": 35.0000,
+            "declared": true,
+            "note": "1000 MiB/s provisioned, 125 included; 875 MiB/s ÷ 1024"
+          }
+        ]
+      },
+      "delta": 130.0000,
+      "blocking": false
+    },
+    {
+      "address": "aws_instance.worker",
+      "type": "aws_instance",
+      "action": "create",
+      "zero_cost": false,
+      "before": null,
+      "after": {
+        "monthly": 99.5680,
+        "lines": [
+          {
+            "name": "compute on-demand, Linux m7g.large",
+            "price_key": "AmazonEC2|BoxUsage:m7g.large|RunInstances",
+            "sku": "Y4JWUCG93UEP6MPT",
+            "usage_type": "BoxUsage:m7g.large",
+            "rate_code": "Y4JWUCG93UEP6MPT.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.0816 per On Demand Linux m7g.large Instance Hour",
+            "billing_rule": "fixed_hourly",
+            "unit_price": 0.0816,
+            "quantity": 730,
+            "unit": "h",
+            "monthly": 59.5680,
+            "declared": true
+          },
+          {
+            "name": "root volume (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp3|",
+            "sku": "JG3KUJMBRGHV3N8G",
+            "usage_type": "EBS:VolumeUsage.gp3",
+            "rate_code": "JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 0.08,
+            "quantity": 50,
+            "unit": "GB-month",
+            "monthly": 4.0000,
+            "declared": true
+          },
+          {
+            "name": "root volume IOPS above 3000 (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeP-IOPS.gp3|",
+            "sku": "7Q58NR58VQEASA4W",
+            "usage_type": "EBS:VolumeP-IOPS.gp3",
+            "rate_code": "7Q58NR58VQEASA4W.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.005 per provisioned IOPS-month of gp3 - US East (N. Virginia)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 0.005,
+            "quantity": 1000,
+            "unit": "IOPS-month",
+            "monthly": 5.0000,
+            "declared": true,
+            "note": "4000 IOPS provisioned, 3000 included"
+          },
+          {
+            "name": "ebs_block_device[0] (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp3|",
+            "sku": "JG3KUJMBRGHV3N8G",
+            "usage_type": "EBS:VolumeUsage.gp3",
+            "rate_code": "JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 0.08,
+            "quantity": 200,
+            "unit": "GB-month",
+            "monthly": 16.0000,
+            "declared": true
+          },
+          {
+            "name": "ebs_block_device[0] throughput above 125 MiB/s (gp3)",
+            "price_key": "AmazonEC2|EBS:VolumeP-Throughput.gp3|",
+            "sku": "SQUFRQX4K92S4SBB",
+            "usage_type": "EBS:VolumeP-Throughput.gp3",
+            "rate_code": "SQUFRQX4K92S4SBB.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.04 per provisioned MiBps-month of gp3 - US East (N. Virginia)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 40.96,
+            "quantity": 0.3662109375,
+            "unit": "GiBps-month",
+            "monthly": 15.0000,
+            "declared": true,
+            "note": "500 MiB/s provisioned, 125 included; 375 MiB/s ÷ 1024"
+          }
+        ]
+      },
+      "delta": 99.5680,
+      "blocking": false
+    }
+  ],
+  "usage_not_declared": []
+}

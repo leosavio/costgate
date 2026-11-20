@@ -9,7 +9,8 @@
   },
   "types": {
     "aws_nat_gateway": {"gb_per_month": 50},
-    "aws_vpc_endpoint": {"gb_per_month": 10}
+    "aws_vpc_endpoint": {"gb_per_month": 10},
+    "aws_eks_cluster": {"auto_mode_instance_hours": {"c6a.xlarge": 1460}}
   },
   "resources": {
     "aws_instance.worker": {"hours_per_month": 200, "spot_discount": 0.7},

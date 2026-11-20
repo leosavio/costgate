@@ -1,0 +1,52 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.13.4",
+  "resource_changes": [
+    {
+      "address": "aws_ebs_volume.shuffle",
+      "mode": "managed",
+      "type": "aws_ebs_volume",
+      "name": "shuffle",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"availability_zone": "us-east-1a", "size": 1000, "type": "gp3", "iops": 6000, "throughput": 1000, "region": "us-east-1"},
+        "after_unknown": {"arn": true, "id": true}
+      }
+    },
+    {
+      "address": "aws_ebs_volume.logs",
+      "mode": "managed",
+      "type": "aws_ebs_volume",
+      "name": "logs",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["update"],
+        "before": {"availability_zone": "us-east-1a", "size": 100, "type": "gp3", "iops": 3000, "throughput": 125, "region": "us-east-1"},
+        "after": {"availability_zone": "us-east-1a", "size": 100, "type": "gp3", "iops": 3000, "throughput": 250, "region": "us-east-1"},
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "aws_instance.worker",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "worker",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "ami": "ami-00000000000000000",
+          "instance_type": "m7g.large",
+          "tenancy": "default",
+          "region": "us-east-1",
+          "root_block_device": [{"volume_size": 50, "volume_type": "gp3", "iops": 4000, "throughput": 125}],
+          "ebs_block_device": [{"device_name": "/dev/sdf", "volume_size": 200, "volume_type": "gp3", "iops": 3000, "throughput": 500}]
+        },
+        "after_unknown": {"arn": true, "id": true}
+      }
+    }
+  ]
+}

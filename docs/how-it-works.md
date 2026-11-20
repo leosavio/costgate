@@ -18,7 +18,7 @@ flowchart LR
   subgraph prices["Prices: weekly, in this repository"]
     direction TB
     api["AWS Price List Bulk API<br/>public files, no credential"] --> refresh["costgate pricing refresh"]
-    refresh --> snap["pricing/us-east-1.json<br/>schema_version 2, sha256"]
+    refresh --> snap["pricing/us-east-1.json, us-west-2.json<br/>schema_version 2, sha256"]
     snap --> pr["pull request opened by<br/>refresh-pricing.yml, reviewed"]
     pr --> bin["costgate release<br/>snapshot embedded in the binary"]
   end
@@ -57,7 +57,7 @@ flowchart TD
   keep -- yes --> key["price key<br/>service, usage type without region prefix, operation"]
   key --> entry["snapshot entry<br/>SKU, rate code, raw usage type, unit,<br/>USD price, description, later tiers"]
   entry --> seal["seal<br/>as_of = newest publication date of the files<br/>sha256 of the content"]
-  seal --> out["pricing/us-east-1.json"]
+  seal --> out["pricing/us-east-1.json or us-west-2.json<br/>one file per region"]
 ```
 
 1. The refresh reads the public index of the
@@ -107,10 +107,12 @@ flowchart TD
   parse --> each["each managed resource change<br/>before side and after side"]
   premises --> each
   load --> each
-  each --> zero{"type without a charge<br/>of its own?"}
+  each --> ign{"provider in<br/>--ignore-provider?"}
+  ign -- yes --> ignored["listed as ignored<br/>out of the estimate and the gate"]
+  ign -- no --> zero{"type without a charge<br/>of its own?"}
   zero -- yes --> free["no charge"]
-  zero -- no --> known{"formula for the type?<br/>AWS provider?<br/>same region?"}
-  known -- no --> unpriced["unpriced, with the reason"]
+  zero -- no --> known{"AWS provider?<br/>formula for the type?<br/>region of the resource = --region?"}
+  known -- no --> unpriced["unpriced, with the reason<br/>provider, type, region, config or price"]
   known -- yes --> comps["cost components<br/>quantity x unit price x factor, exact decimals"]
   comps --> found{"price key<br/>in the snapshot?"}
   found -- no --> unpriced
@@ -119,14 +121,15 @@ flowchart TD
   unpriced --> gate
   line --> gate
   gate --> render["Markdown, JSON, JSON Lines<br/>and the exit code"]
+  ignored --> render
 ```
 
 ### Inputs
 
 | Input | What is read | What is refused (exit 3) |
 |---|---|---|
-| Plan, from `terraform show -json <planfile>` or `tofu show -json` | `format_version` and, for each entry of `resource_changes`: address, mode, type, provider, actions, `before`, `after`, `after_unknown` | a state file (no `planned_values` nor `resource_changes`), a `format_version` other than 1.x, an unknown list of actions |
-| Premises file (`--usage`) | per-field values for hours, GB, Spot discount, events, AZ count, root volume size | `schema_version` other than 1, unknown fields, values out of range (hours above 744, Spot discount of 1 or more, negative values) |
+| Plan, from `terraform show -json <planfile>` or `tofu show -json` | `format_version` and, for each entry of `resource_changes`: address, mode, type, provider, actions, `before`, `after`, `after_unknown`; from `configuration`: the `provider_config_key` of each resource and the constant `region` of each provider configuration | a state file (no `planned_values` nor `resource_changes`), a `format_version` other than 1.x, an unknown list of actions |
+| Premises file (`--usage`) | per-field values for hours, GB, Spot discount, events, AZ count, root volume size, EKS extended support hours, EKS Auto Mode instance hours by type | `schema_version` other than 1, unknown fields, values out of range (hours above 744, Spot discount of 1 or more, negative values), a key of `auto_mode_instance_hours` that is not an instance type |
 | Price snapshot | the embedded file of `--region`, or `--pricing <file>` | wrong `sha256`, unknown fields, `schema_version` outside 1 to 2, currency other than USD, region different from `--region` |
 
 Data sources (`mode = data`) and `read` actions are skipped. Each action decides which sides exist:
@@ -147,30 +150,52 @@ resolved separately, in this order, and the first one that sets it wins:
 | 4 | `defaults` | `defaults.az_count` |
 | 5 | built in | 730 hours, Spot discount 0, 2 AZs, 8 GB root volume |
 
-GB and events have no built-in value: they count as 0 and the report lists them as "not
-declared", so a missing premise is visible.
+GB, events and the EKS Auto Mode instance hours have no built-in value: they count as 0 and the
+report lists them as "not declared", so a missing premise is visible.
+
+### Region of each resource
+
+A snapshot has the prices of one region. For each side, costgate takes the region from the first
+source that has it: the resource's `region` attribute (AWS provider 6.x); the constant `region`
+of its provider configuration (`provider_config_key` of the resource in `configuration`); the
+region of its own ARN, or of its nested ARNs when they all agree; the one region that every other
+resource of the same provider configuration names through its attribute or ARN. A region from a
+variable or a local is not in the plan, so the last source covers the common
+`region = var.region` case for resources without ARN. When none applies, the side is priced in
+`--region`.
+
+A provider configuration whose region (constant, or learned from its resources) differs from
+`--region` adds a `region_mismatch` warning at the top of every output, with the command that
+prices the plan in its region.
 
 ### Pricing each resource
 
 For each side of each resource:
 
-1. A type in the zero-cost list (VPC, subnets, routes, security groups, IAM, Organizations…)
+1. A resource of a provider listed in `--ignore-provider` is left out: no price, no gate, one
+   entry in the ignored list of every output.
+2. A type in the zero-cost list (VPC, subnets, routes, security groups, IAM, Organizations…)
    costs nothing and needs no price.
-2. A type without a formula in [`internal/estimate/resources.go`](../internal/estimate/resources.go),
-   a resource of another provider, or one whose `region` differs from `--region` is **unpriced**,
-   with the reason. So is a configuration the formula does not model (gp3 above 3000 IOPS,
-   regional NAT gateway, CloudTrail data events…).
-3. Otherwise the formula returns cost components. Each component is
+3. A resource of another provider (reason `provider`), a type without a formula in
+   [`internal/estimate/resources.go`](../internal/estimate/resources.go) (`type`), or a resource
+   in another region than `--region` (`region`) is **unpriced**, with the reason. So is a
+   configuration the formula does not model (`config`: EBS io1/io2, regional NAT gateway,
+   CloudTrail data events…).
+4. Otherwise the formula returns cost components. Each component is
    `quantity × unit price × factor`: 730 hours of a NAT gateway, 50 GB of data from the premises,
-   1 hosted zone per month, an on-demand price times `1 − spot_discount` for Spot.
-4. Each component looks up its price key in the snapshot. A missing key makes the side unpriced;
-   a found key adds a cost line with the bill keys of that price.
-5. All arithmetic uses exact decimals (`math/big`), never floating point. Values are rounded only
+   1 hosted zone per month, an on-demand price times `1 − spot_discount` for Spot, the gp3 IOPS
+   above 3000.
+5. Each component looks up its price key in the snapshot. A missing key makes the side unpriced
+   (`price`); a found key adds a cost line with the bill keys of that price. The one component
+   without a key is an undeclared EKS Auto Mode fee, whose SKU depends on the instance type the
+   premise would name: it counts 0 and is listed as not declared.
+6. All arithmetic uses exact decimals (`math/big`), never floating point. Values are rounded only
    when rendered.
 
 Each line also gets a `billing_rule`: `fixed_hourly` (billed per hour the resource exists),
-`fixed_monthly` (per month: hosted zone, KMS key, Private CA, provisioned EBS GB-month) or `usage`
-(traffic, stored data, events, Spot market price). The `fixed_*` lines are the ones expected to
+`fixed_monthly` (per month: hosted zone, KMS key, Private CA, provisioned EBS GB-month, gp3 IOPS
+and throughput above the baseline) or `usage` (traffic, stored data, events, Spot market price,
+EKS extended support and Auto Mode fee). The `fixed_*` lines are the ones expected to
 match the AWS bill by SKU and quantity; `usage` lines depend on premises.
 
 ### The gate
@@ -198,9 +223,9 @@ incomplete. costgate only returns the code; accepting exit 1 or 2 (for example w
 
 | Output | Content |
 |---|---|
-| Markdown (stdout by default, `--markdown-out`) | first line `<!-- costgate -->`, so a CI job can find and update its own comment; totals, checks, one row per changed resource with the formula, a collapsed block with the bill keys of each cost line, unpriced resources and their reasons, premises not declared, and a footer with the costgate version and the snapshot date and hash |
-| JSON report (`--format json`, `--json-out`) | the same data for machines, `schema_version` 1 |
-| JSON Lines (`--json-lines`) | one standalone document per cost line, for Athena, `jq` or any line-oriented tool |
+| Markdown (stdout by default, `--markdown-out`) | first line `<!-- costgate -->`, so a CI job can find and update its own comment; warnings with their fix, totals, checks, one row per changed resource with the formula, a collapsed block with the bill keys of each cost line, unpriced resources and their reasons, premises not declared, the resources of ignored providers, and a footer with the costgate version, the snapshot date and hash, and `--ignore-provider` when set |
+| JSON report (`--format json`, `--json-out`) | the same data for machines, `schema_version` 1; `warnings`, `ignored_providers` and `ignored` only when they apply |
+| JSON Lines (`--json-lines`) | one standalone document per cost line, for Athena, `jq` or any line-oriented tool; warnings first (`kind: costgate.warning`) and ignored resources last (`kind: costgate.ignored`) when they apply |
 | Exit code | 0, 1, 2 or 3, as above |
 
 The report lists resource addresses as they appear in the plan, including `for_each` keys, and the

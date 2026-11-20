@@ -11,6 +11,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/leosavio/costgate/internal/catalog"
@@ -37,7 +40,7 @@ const usageText = `costgate projects the monthly AWS cost of a Terraform/OpenTof
 Usage:
   costgate diff --plan <plan.json|-> [flags]
   costgate pricing refresh [--region us-east-1] [--out pricing/us-east-1.json]
-  costgate pricing verify [--pricing <file>] [--region us-east-1]
+  costgate pricing verify [--pricing <file>] [--region <region>]
   costgate version
 
 Exit codes: 0 ok, 1 above a ceiling, 2 unpriced resource, 3 usage or input error.
@@ -101,6 +104,33 @@ func (f *ratFlag) Set(s string) error {
 	return nil
 }
 
+// providerList is a repeatable, comma-separated list of providers.
+type providerList struct{ v []string }
+
+func (p *providerList) String() string { return strings.Join(p.v, ",") }
+
+func (p *providerList) Set(s string) error {
+	for _, e := range strings.Split(s, ",") {
+		e = strings.TrimSpace(e)
+		if e == "" {
+			return errors.New("empty provider name")
+		}
+		if e == "aws" || strings.HasSuffix(e, "/aws") {
+			return errors.New("the AWS provider cannot be ignored; costgate prices it")
+		}
+		p.v = append(p.v, e)
+	}
+	return nil
+}
+
+// sorted returns the entries sorted and without duplicates, so the reports
+// do not depend on the flag order.
+func (p *providerList) sorted() []string {
+	out := append([]string{}, p.v...)
+	sort.Strings(out)
+	return slices.Compact(out)
+}
+
 func loadSnapshot(path, region string) (*catalog.Snapshot, error) {
 	var data []byte
 	var err error
@@ -136,6 +166,8 @@ func runDiff(args []string, env Env) int {
 	var maxDelta, maxTotal ratFlag
 	fs.Var(&maxDelta, "max-monthly-delta", "fail (exit 1) when the monthly delta in USD is above this value")
 	fs.Var(&maxTotal, "max-monthly-total", "fail (exit 1) when the monthly total after the change is above this value")
+	var ignore providerList
+	fs.Var(&ignore, "ignore-provider", "comma-separated providers (helm,kubectl,kubernetes) whose resources are left out of the estimate and the gate, and listed as ignored")
 	if err := fs.Parse(args); err != nil {
 		return report.ExitUsage
 	}
@@ -178,12 +210,13 @@ func runDiff(args []string, env Env) int {
 	if err != nil {
 		return fail(env, err)
 	}
-	res, err := estimate.Estimate(p, snap, use, *region)
+	res, err := estimate.Estimate(p, snap, use, estimate.Options{Region: *region, IgnoreProviders: ignore.sorted()})
 	if err != nil {
 		return fail(env, err)
 	}
 	ceil := report.Ceilings{MaxDelta: maxDelta.v, MaxTotal: maxTotal.v}
-	in := report.Input{Version: env.Version, Result: res, Verdict: report.Evaluate(res, ceil), Ceilings: ceil, Pricing: snap}
+	in := report.Input{Version: env.Version, Result: res, Verdict: report.Evaluate(res, ceil), Ceilings: ceil, Pricing: snap,
+		Warnings: report.RegionWarnings(res, pricing.Has)}
 
 	md := report.Markdown(in)
 	js, err := report.JSON(in)
@@ -251,21 +284,52 @@ func runRefresh(args []string, env Env) int {
 	return report.ExitOK
 }
 
+// runVerify checks a snapshot: every embedded one by default, the embedded
+// one of --region, or the file of --pricing (whose region must match
+// --region when both are given).
 func runVerify(args []string, env Env) int {
 	fs := flag.NewFlagSet("pricing verify", flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
-	region := fs.String("region", "us-east-1", "region of the snapshot")
+	region := fs.String("region", "", "region of the snapshot (default: every embedded snapshot, or the region of --pricing)")
 	path := fs.String("pricing", "", "snapshot file (default: embedded)")
 	if err := fs.Parse(args); err != nil {
 		return report.ExitUsage
 	}
-	snap, err := loadSnapshot(*path, *region)
-	if err != nil {
-		return fail(env, err)
+	if fs.NArg() > 0 {
+		return fail(env, fmt.Errorf("unexpected argument %q", fs.Arg(0)))
 	}
+	if *path != "" && *region == "" {
+		data, err := os.ReadFile(*path)
+		if err != nil {
+			return fail(env, err)
+		}
+		snap, err := catalog.Load(data)
+		if err != nil {
+			return fail(env, err)
+		}
+		printVerified(env, snap)
+		return report.ExitOK
+	}
+	regions := pricing.Regions()
+	if *region != "" {
+		regions = []string{*region}
+	}
+	code := report.ExitOK
+	for _, r := range regions {
+		snap, err := loadSnapshot(*path, r)
+		if err != nil {
+			fmt.Fprintf(env.Stderr, "costgate: %s: %v\n", r, err)
+			code = report.ExitUsage
+			continue
+		}
+		printVerified(env, snap)
+	}
+	return code
+}
+
+func printVerified(env Env, snap *catalog.Snapshot) {
 	fmt.Fprintf(env.Stdout, "ok %s: %d prices, as of %s, sha256 %s\n", snap.Region, len(snap.Prices), snap.AsOf, snap.SHA256)
 	for _, s := range snap.Sources {
 		fmt.Fprintf(env.Stdout, "  %s/%s version %s published %s\n", s.Service, s.Scope, s.Version, s.PublicationDate)
 	}
-	return report.ExitOK
 }

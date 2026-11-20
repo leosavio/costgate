@@ -1,7 +1,7 @@
 ---
 type: guide
 summary: "Contrato de contexto do repo costgate para agentes: CLI Go (MIT) que projeta o custo mensal AWS de um terraform/tofu plan com snapshot da Price List Bulk API e gate fail-closed de PR."
-updated: 2026-11-05
+updated: 2026-11-20
 tags: [agents, aws, cost, terraform]
 ---
 
@@ -26,19 +26,34 @@ Bulk API e devolve Markdown/JSON + exit code para gate de PR. Primeiro consumido
 | Componente | Tecnologia | Nota |
 |---|---|---|
 | `cmd/costgate` | Go 1.27, só stdlib | binário único; `-X main.version` no release |
-| `internal/plan` | parser de `show -json` (`format_version` 1.x) | rejeita state; Terraform e OpenTofu |
-| `internal/usage` | premissas JSON `schema_version` 1 | precedência resources > types > defaults > embutido |
+| `internal/plan` | parser de `show -json` (`format_version` 1.x) | rejeita state; Terraform e OpenTofu; lê `configuration` (`provider_config_key`, `region` constante do provider) |
+| `internal/usage` | premissas JSON `schema_version` 1 | precedência resources > types > defaults > embutido; EKS: `extended_support_hours`, `auto_mode_instance_hours` |
 | `internal/catalog` | snapshot `schema_version` 2 + `pricing refresh` (CSV em streaming) | regras de SKU em `rules.go`; `sha256` verificado no load; lê v1 e v2 |
-| `internal/estimate` | fórmulas por tipo + lista de custo zero | `resources.go`; valores em `math/big.Rat` |
-| `internal/report` | gate (exit 0/1/2/3), Markdown com marcador, JSON `schema_version` 1, JSON Lines | chaves da fatura por linha (`sku`, `usage_type`, `rate_code`, `billing_description`, `billing_rule`) |
-| `pricing/us-east-1.json` | snapshot embutido (`go:embed`) | 1415 preços, as of 2026-11-03 |
+| `internal/estimate` | fórmulas por tipo + lista de custo zero + região por recurso (`region.go`) | `resources.go`; valores em `math/big.Rat`; motivo de não precificado (`provider`/`type`/`region`/`config`/`price`) |
+| `internal/report` | gate (exit 0/1/2/3), Markdown com marcador, JSON `schema_version` 1, JSON Lines | chaves da fatura por linha; `warnings` (`region_mismatch`) e `ignored` só quando se aplicam |
+| `pricing/us-east-1.json`, `pricing/us-west-2.json` | snapshots embutidos (`go:embed *.json`) | 2684 e 2648 preços, as of 2026-11-20 (inclui 1261/1244 taxas do EKS Auto Mode) |
+| `scripts/pricing-diff.sh` | sh + `jq` | compara só o mapa `prices` com um ref; exit 0 igual, 1 mudou (usado pelo `refresh-pricing.yml`) |
 | `site/` | landing estática (Cloudflare Pages, stack `site-cdn-dns-central/cf-pages/costgate-site`) | `ping.js`: 1 evento por aba, sem cookie, filtros de robô; só a página mede |
 | `scripts/adoption-stats.sh` | sh + `gh` + `jq` | métricas de adoção do mantenedor; dado no repo privado `costgate-metrics` |
-| CI | GitHub Actions: `ci.yml` (lint + matriz nativa de teste linux/darwin × amd64/arm64), `release.yml` (cosign keyless), `install-smoke.yml` (brew, go install e tarball nas 4 plataformas), `refresh-pricing.yml` (semanal; `dry_run_pr` prova o PR) | actions por SHA |
+| CI | GitHub Actions: `ci.yml` (lint + matriz nativa de teste linux/darwin × amd64/arm64), `release.yml` (cosign keyless), `install-smoke.yml` (brew, go install e tarball nas 4 plataformas), `refresh-pricing.yml` (semanal, todas as regiões embutidas; PR só se `prices` mudar, branch única `pricing/refresh`; `dry_run_pr` prova o PR) | actions por SHA |
 
 ## Estado atual (onde parei)
 
-> Última atualização: 2026-11-05 (6ª sessão)
+> Última atualização: 2026-11-20 (7ª sessão, sem commit: mudanças na branch `feat/workshop-findings`)
+
+7ª sessão (achados da avaliação no workshop AWS Spark on EKS, propostas P1, P5, P6, P2 e P3 de
+`aws-spark-on-eks-workshop/extra-02-avaliacao-ferramentas/kubecost-costgate-insights.md`):
+região por recurso pelo plan (atributo `region` → `region` constante do provider →
+ARN → ARNs dos outros recursos do mesmo provider), recurso em outra região vira não precificado
+com motivo `region` e o relatório ganha o aviso `region_mismatch` com a correção; gp3 acima de
+3000 IOPS e 125 MiB/s precificado (`EBS:VolumeP-IOPS.gp3`, `EBS:VolumeP-Throughput.gp3`);
+snapshot us-west-2 embutido, `pricing verify` confere todos, refresh semanal abre PR só quando
+`prices` muda; motivo `provider` separado de `type` e `--ignore-provider`; `aws_eks_cluster`
+precificado (control plane US$ 0,10/h, suporte estendido e taxa do Auto Mode só por premissa,
+SKUs `EKS-Auto:<tipo>-management-hours` da Bulk API). Totais dos goldens antigos iguais; só
+`as_of`, `sha256` e a fonte AmazonEKS do snapshot de fixture mudaram, mais `unpriced_reason` no
+JSON do caso `unpriced`. PRs de refresh #3 e #5 fechados pelo orquestrador (só `as_of`). Sem
+release.
 
 6ª sessão (métricas de adoção, decisões do operador de 2026-11-05): `scripts/adoption-stats.sh`
 coleta traffic, downloads, stars e os jobs do nosso CI (descontados), e o repo privado
@@ -84,6 +99,9 @@ Operador confirmou D4/D5 da ADR-001. Integração com o foundation **só documen
 ## Próximos passos
 
 - [ ] Foundation: errata na ADR-011 §2 (Infracost → costgate) e job de custo a partir de `docs/integration/github-actions.md`
+- [ ] Release com as mudanças da 7ª sessão (região, gp3, us-west-2, `--ignore-provider`, EKS); revalidar no plan do workshop com `--region us-west-2`
+- [ ] Resolver `region = var.<nome>` do provider pelo `variables` do plan (hoje só constante, ARN ou recursos irmãos)
+- [ ] P4 do workshop: disco raiz do NodeClass/EC2NodeClass (`kubectl_manifest`) por premissa
 - [ ] Resolver `subnet_ids` desconhecido pela seção `configuration` do plan (hoje usa `az_count`)
 - [ ] ASG + launch template (`desired_capacity` × tipo)
 - [ ] Mapear T3-03 Network Firewall, T3-06 Route 53 Profiles, T3-08 IPAM Advanced e VPC Encryption Controls quando um módulo os usar
@@ -96,8 +114,10 @@ Operador confirmou D4/D5 da ADR-001. Integração com o foundation **só documen
 go vet ./... && ~/go/bin/staticcheck ./... && go test -race -count=1 ./...
 go test ./internal/cli -update                       # regrava goldens; revisar diff
 GOARCH=amd64 go test ./...                           # determinismo cross-arch (Rosetta)
-go run ./cmd/costgate pricing refresh                # baixa a Bulk API pública (~12 s), grava pricing/us-east-1.json
-go run ./cmd/costgate pricing verify
+go run ./cmd/costgate pricing refresh                # baixa a Bulk API pública (~19 s), grava pricing/us-east-1.json
+go run ./cmd/costgate pricing refresh --region us-west-2 --out pricing/us-west-2.json
+go run ./cmd/costgate pricing verify                 # confere todos os snapshots embutidos
+sh scripts/pricing-diff.sh HEAD                      # o que o refresh mudou em `prices` (exit 1 = mudou)
 go run ./cmd/costgate diff --plan testdata/cases/baseline/plan.json --usage testdata/cases/baseline/usage.json --max-monthly-delta 50 --json-lines /tmp/lines.jsonl
 git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z   # release.yml: binários, checksums, assinatura, fórmula no tap
 sh scripts/homebrew-formula.sh X.Y.Z checksums.txt    # fórmula manual (fallback sem deploy key)

@@ -50,6 +50,9 @@ func TestLoadValidation(t *testing.T) {
 		"spot 1":        `{"schema_version": 1, "defaults": {"spot_discount": 1}}`,
 		"negative gb":   `{"schema_version": 1, "types": {"aws_s3_bucket": {"gb_per_month": -1}}}`,
 		"az fraction":   `{"schema_version": 1, "defaults": {"az_count": 1.5}}`,
+		"extended 745":  `{"schema_version": 1, "defaults": {"extended_support_hours": 745}}`,
+		"auto negative": `{"schema_version": 1, "types": {"aws_eks_cluster": {"auto_mode_instance_hours": {"c6a.xlarge": -1}}}}`,
+		"auto type":     `{"schema_version": 1, "types": {"aws_eks_cluster": {"auto_mode_instance_hours": {"c6a": 10}}}}`,
 	}
 	for name, doc := range bad {
 		if _, err := Load([]byte(doc)); err == nil {
@@ -57,6 +60,29 @@ func TestLoadValidation(t *testing.T) {
 		} else if !strings.HasPrefix(err.Error(), "usage file") {
 			t.Errorf("%s: error without context: %v", name, err)
 		}
+	}
+}
+
+func TestResolveEKSPremises(t *testing.T) {
+	f, err := Load([]byte(`{
+		"schema_version": 1,
+		"types": {"aws_eks_cluster": {"auto_mode_instance_hours": {"m5.large": 730}}},
+		"resources": {"aws_eks_cluster.big": {"auto_mode_instance_hours": {"c6a.xlarge": 1460, "m7g.large": 100}, "extended_support_hours": 200}}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	big := f.Resolve("aws_eks_cluster.big", "aws_eks_cluster")
+	if !big.AutoModeInstanceHours.Declared || strings.Join(big.AutoModeInstanceHours.Keys(), ",") != "c6a.xlarge,m7g.large" ||
+		money.Trim(big.AutoModeInstanceHours.V["c6a.xlarge"]) != "1460" || money.Trim(big.ExtendedSupportHours.V) != "200" {
+		t.Errorf("big: %+v %+v", big.AutoModeInstanceHours, big.ExtendedSupportHours)
+	}
+	other := f.Resolve("aws_eks_cluster.other", "aws_eks_cluster")
+	if other.AutoModeInstanceHours.From != "types[aws_eks_cluster]" || other.ExtendedSupportHours.Declared {
+		t.Errorf("other: %+v %+v", other.AutoModeInstanceHours, other.ExtendedSupportHours)
+	}
+	if none := Empty().Resolve("aws_eks_cluster.x", "aws_eks_cluster"); none.AutoModeInstanceHours.Declared || none.ExtendedSupportHours.Declared {
+		t.Errorf("empty file declares EKS premises: %+v", none)
 	}
 }
 
