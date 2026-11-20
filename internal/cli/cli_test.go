@@ -120,6 +120,8 @@ func checkJSONLines(t *testing.T, js, jl []byte) {
 		Pricing       struct {
 			AsOf string `json:"as_of"`
 		} `json:"pricing"`
+		Warnings  []map[string]any `json:"warnings"`
+		Ignored   []map[string]any `json:"ignored"`
 		Resources []struct {
 			Address string `json:"address"`
 			Before  *struct {
@@ -142,32 +144,62 @@ func checkJSONLines(t *testing.T, js, jl []byte) {
 			want = append(want, r.After.Lines...)
 		}
 	}
-	docs := strings.Split(strings.TrimSuffix(string(jl), "\n"), "\n")
+	all := strings.Split(strings.TrimSuffix(string(jl), "\n"), "\n")
 	if len(jl) == 0 {
-		docs = nil
+		all = nil
 	}
-	if len(docs) != len(want) {
-		t.Fatalf("json lines: %d documents, report has %d cost lines", len(docs), len(want))
-	}
-	billingRules := map[string]bool{"fixed_hourly": true, "fixed_monthly": true, "usage": true}
-	for i, d := range docs {
+	// Warnings first, cost lines, then ignored resources.
+	byKind := map[string][]map[string]any{}
+	var order []string
+	for i, d := range all {
 		var doc map[string]any
 		if err := json.Unmarshal([]byte(d), &doc); err != nil {
 			t.Fatalf("json lines %d: %v", i+1, err)
 		}
-		if doc["schema_version"] != float64(rep.SchemaVersion) || doc["version"] != rep.Version ||
-			doc["pricing_as_of"] != rep.Pricing.AsOf || doc["kind"] != "costgate.line" {
+		if doc["schema_version"] != float64(rep.SchemaVersion) || doc["version"] != rep.Version || doc["pricing_as_of"] != rep.Pricing.AsOf {
 			t.Errorf("json lines %d: report fields missing: %s", i+1, d)
 		}
+		kind, _ := doc["kind"].(string)
+		if len(order) == 0 || order[len(order)-1] != kind {
+			order = append(order, kind)
+		}
+		byKind[kind] = append(byKind[kind], doc)
+	}
+	rank := map[string]int{"costgate.warning": 0, "costgate.line": 1, "costgate.ignored": 2}
+	for i, k := range order {
+		if _, ok := rank[k]; !ok || (i > 0 && rank[order[i-1]] >= rank[k]) {
+			t.Errorf("json lines: kinds out of order or unknown: %v", order)
+		}
+	}
+	if len(byKind["costgate.warning"]) != len(rep.Warnings) || len(byKind["costgate.ignored"]) != len(rep.Ignored) {
+		t.Errorf("json lines: %d warnings and %d ignored, report has %d and %d",
+			len(byKind["costgate.warning"]), len(byKind["costgate.ignored"]), len(rep.Warnings), len(rep.Ignored))
+	}
+	for i, w := range rep.Warnings {
+		if i < len(byKind["costgate.warning"]) && byKind["costgate.warning"][i]["fix"] != w["fix"] {
+			t.Errorf("json lines warning %d differs from the report", i+1)
+		}
+	}
+	docs := byKind["costgate.line"]
+	if len(docs) != len(want) {
+		t.Fatalf("json lines: %d cost line documents, report has %d cost lines", len(docs), len(want))
+	}
+	billingRules := map[string]bool{"fixed_hourly": true, "fixed_monthly": true, "usage": true}
+	for i, doc := range docs {
 		for k, v := range want[i] {
 			if doc[k] != v {
 				t.Errorf("json lines %d: %s = %v, report line has %v", i+1, k, doc[k], v)
 			}
 		}
-		for _, k := range []string{"sku", "usage_type", "rate_code", "billing_description"} {
-			if s, _ := doc[k].(string); s == "" {
-				t.Errorf("json lines %d: %s empty", i+1, k)
+		// A premise-only line (undeclared, no price key) has no bill keys.
+		if doc["price_key"] != "" {
+			for _, k := range []string{"sku", "usage_type", "rate_code", "billing_description"} {
+				if s, _ := doc[k].(string); s == "" {
+					t.Errorf("json lines %d: %s empty", i+1, k)
+				}
 			}
+		} else if doc["declared"] != false || doc["monthly"] != float64(0) {
+			t.Errorf("json lines %d: line without price key must be an undeclared premise counted 0: %v", i+1, doc)
 		}
 		if r, _ := doc["billing_rule"].(string); !billingRules[r] {
 			t.Errorf("json lines %d: billing_rule %q", i+1, r)
@@ -224,8 +256,13 @@ func TestUsageErrorsExit3(t *testing.T) {
 		"bad usage":        {"diff", "--plan", plan, "--usage", badUsage},
 		"state not plan":   {"diff", "--plan", statePath},
 		"missing file":     {"diff", "--plan", filepath.Join(tmp, "nope.json")},
-		"region mismatch":  {"diff", "--plan", plan, "--region", "us-west-2"},
+		"not embedded":     {"diff", "--plan", plan, "--region", "us-east-2"},
+		"snapshot region":  {"diff", "--plan", plan, "--region", "us-west-2", "--pricing", filepath.Join(root, "pricing.golden.json")},
 		"refresh region":   {"pricing", "refresh", "--region", "sa-east-1", "--out", filepath.Join(tmp, "x.json")},
+		"ignore aws":       {"diff", "--plan", plan, "--ignore-provider", "helm,aws"},
+		"ignore hc aws":    {"diff", "--plan", plan, "--ignore-provider", "hashicorp/aws"},
+		"ignore empty":     {"diff", "--plan", plan, "--ignore-provider", "helm,"},
+		"verify mismatch":  {"pricing", "verify", "--pricing", filepath.Join(root, "pricing.golden.json"), "--region", "us-west-2"},
 	}
 	for name, args := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -253,9 +290,39 @@ func TestStdinPlanAndJSONFormat(t *testing.T) {
 	}
 }
 
+// pricing verify without flags checks every embedded snapshot.
 func TestEmbeddedSnapshotVerifies(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"pricing", "verify"}, Env{Version: "test", Stdout: &stdout, Stderr: &stderr}); code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	for _, r := range []string{"us-east-1", "us-west-2"} {
+		if !strings.Contains(stdout.String(), "ok "+r+": ") {
+			t.Errorf("verify did not check %s:\n%s", r, stdout.String())
+		}
+	}
+	stdout.Reset()
+	if code := Run([]string{"pricing", "verify", "--region", "us-west-2"}, Env{Version: "test", Stdout: &stdout, Stderr: &stderr}); code != 0 ||
+		strings.Contains(stdout.String(), "us-east-1:") {
+		t.Errorf("verify --region us-west-2: exit %d\n%s", code, stdout.String())
+	}
+	stdout.Reset()
+	if code := Run([]string{"pricing", "verify", "--pricing", filepath.Join(root, "pricing.golden.json")}, Env{Version: "test", Stdout: &stdout, Stderr: &stderr}); code != 0 {
+		t.Errorf("verify --pricing: exit %d: %s", code, stderr.String())
+	}
+}
+
+// --region us-west-2 works without --pricing: the snapshot is embedded.
+func TestEmbeddedUSWest2(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"diff", "--plan", filepath.Join(root, "cases", "region-provider", "plan.json"), "--region", "us-west-2", "--format", "json"},
+		Env{Version: "test", Stdout: &stdout, Stderr: &stderr})
+	if code != 0 && code != 2 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, `"region": "us-west-2"`) || !strings.Contains(out, `"usage_type": "USW2-PublicIPv4:InUseAddress"`) ||
+		strings.Contains(out, "USE1-") || strings.Contains(out, `"code": "region_mismatch"`) {
+		t.Errorf("us-west-2 run does not price with USW2 keys or still warns:\n%s", out)
 	}
 }

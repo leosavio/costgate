@@ -54,6 +54,22 @@ var (
 	keyTrailEvents   = catalog.Key("AWSCloudTrail", "PaidEventsRecorded", "")
 	keyPCAGeneral    = catalog.Key("AWSCertificateManager", "PaidPrivateCA", "")
 	keyPCAShortLived = catalog.Key("AWSCertificateManager", "ShortLivedCertificatePrivateCA", "")
+	keyEKSCluster    = catalog.Key("AmazonEKS", "AmazonEKS-Hours:perCluster", "CreateOperation")
+	keyEKSExtended   = catalog.Key("AmazonEKS", "AmazonEKS-Hours:extendedSupport", "ExtendedSupport")
+)
+
+// eksAutoModeKey is the EKS Auto Mode management fee of one instance type.
+func eksAutoModeKey(instanceType string) string {
+	return catalog.Key("AmazonEKS", "EKS-Auto:"+instanceType+"-management-hours", "EKSAutoUsage")
+}
+
+// gp3 performance above the baseline included in the GB-month price.
+var (
+	keyGP3IOPS        = catalog.Key("AmazonEC2", "EBS:VolumeP-IOPS.gp3", "")
+	keyGP3Throughput  = catalog.Key("AmazonEC2", "EBS:VolumeP-Throughput.gp3", "")
+	gp3BaseIOPS       = money.Int(3000)
+	gp3BaseThroughput = money.Int(125) // MiB/s
+	mibPerGiB         = money.Int(1024)
 )
 
 func instanceKey(instanceType string) string {
@@ -92,6 +108,7 @@ var estimators = map[string]estimator{
 	"aws_acmpca_certificate_authority":           privateCA,
 	"aws_acm_certificate":                        acmCertificate,
 	"aws_accessanalyzer_analyzer":                accessAnalyzer,
+	"aws_eks_cluster":                            eksCluster,
 }
 
 // zeroCostTypes have no charge of their own. Their indirect costs (traffic,
@@ -173,20 +190,30 @@ func eip(a attrs, u usage.Resolved) side {
 	return side{comps: []comp{hourly("public IPv4 address", keyIPv4, u, nil)}}
 }
 
-func volumeComp(name, volType string, size *big.Rat, iops, throughput *big.Rat) (comp, string) {
+// volumeComps prices one EBS volume: the GB-month line, and for gp3 the
+// IOPS above 3000 and the throughput above 125 MiB/s, which AWS bills on
+// their own usage types. The Price List bills throughput per GiBps-month,
+// so the MiB/s above the baseline are divided by 1024.
+func volumeComps(name, volType string, size *big.Rat, iops, throughput *big.Rat) ([]comp, string) {
 	ut, ok := ebsUsageTypes[volType]
 	if !ok {
-		return comp{}, fmt.Sprintf("EBS volume type %q is not modeled (provisioned IOPS)", volType)
+		return nil, fmt.Sprintf("EBS volume type %q is not modeled (provisioned IOPS)", volType)
 	}
-	if volType == "gp3" {
-		if iops != nil && iops.Cmp(money.Int(3000)) > 0 {
-			return comp{}, "gp3 IOPS above the 3000 baseline are not modeled"
-		}
-		if throughput != nil && throughput.Cmp(money.Int(125)) > 0 {
-			return comp{}, "gp3 throughput above the 125 MiB/s baseline is not modeled"
-		}
+	out := []comp{{name: name + " (" + volType + ")", key: catalog.Key("AmazonEC2", ut, ""), qty: size, unit: "GB-month", declared: true, rule: BillingFixedMonthly}}
+	if volType != "gp3" {
+		return out, ""
 	}
-	return comp{name: name + " (" + volType + ")", key: catalog.Key("AmazonEC2", ut, ""), qty: size, unit: "GB-month", declared: true, rule: BillingFixedMonthly}, ""
+	if iops != nil && iops.Cmp(gp3BaseIOPS) > 0 {
+		out = append(out, comp{name: name + " IOPS above 3000 (gp3)", key: keyGP3IOPS, qty: money.Sub(iops, gp3BaseIOPS),
+			unit: "IOPS-month", declared: true, rule: BillingFixedMonthly, note: money.Trim(iops) + " IOPS provisioned, 3000 included"})
+	}
+	if throughput != nil && throughput.Cmp(gp3BaseThroughput) > 0 {
+		extra := money.Sub(throughput, gp3BaseThroughput)
+		out = append(out, comp{name: name + " throughput above 125 MiB/s (gp3)", key: keyGP3Throughput,
+			qty: new(big.Rat).Quo(extra, mibPerGiB), unit: "GiBps-month", declared: true, rule: BillingFixedMonthly,
+			note: money.Trim(throughput) + " MiB/s provisioned, 125 included; " + money.Trim(extra) + " MiB/s ÷ 1024"})
+	}
+	return out, ""
 }
 
 func instance(forceSpot bool) estimator {
@@ -237,12 +264,12 @@ func instance(forceSpot bool) estimator {
 		}
 		iops, _ := root.number("iops")
 		tp, _ := root.number("throughput")
-		rc, why := volumeComp("root volume", volType, size, iops, tp)
+		rc, why := volumeComps("root volume", volType, size, iops, tp)
 		if why != "" {
 			return unpriced("root_block_device: %s", why)
 		}
-		rc.note = note
-		s.comps = append(s.comps, rc)
+		rc[0].note = note
+		s.comps = append(s.comps, rc...)
 
 		devices, _ := a.list("ebs_block_device")
 		for i, d := range devices {
@@ -257,11 +284,11 @@ func instance(forceSpot bool) estimator {
 			}
 			io, _ := da.number("iops")
 			th, _ := da.number("throughput")
-			dc, why := volumeComp(fmt.Sprintf("ebs_block_device[%d]", i), vt, sz, io, th)
+			dc, why := volumeComps(fmt.Sprintf("ebs_block_device[%d]", i), vt, sz, io, th)
 			if why != "" {
 				return unpriced("ebs_block_device[%d]: %s", i, why)
 			}
-			s.comps = append(s.comps, dc)
+			s.comps = append(s.comps, dc...)
 		}
 		return s
 	}
@@ -279,12 +306,12 @@ func ebsVolume(a attrs, u usage.Resolved) side {
 	}
 	iops, _ := a.number("iops")
 	tp, _ := a.number("throughput")
-	c, why := volumeComp("EBS volume", volType, size, iops, tp)
+	c, why := volumeComps("EBS volume", volType, size, iops, tp)
 	if why != "" {
 		return unpriced("%s", why)
 	}
-	c.note = note
-	return side{comps: []comp{c}}
+	c[0].note = note
+	return side{comps: c}
 }
 
 func vpcEndpoint(a attrs, u usage.Resolved) side {
@@ -417,6 +444,46 @@ func acmCertificate(a attrs, u usage.Resolved) side {
 		}
 	}
 	return side{}
+}
+
+// eksCluster prices the control plane hour (standard support). Extended
+// support and the EKS Auto Mode management fee depend on facts the plan does
+// not carry (the Kubernetes version calendar, the nodes Auto Mode launches),
+// so they come only from declared premises.
+func eksCluster(a attrs, u usage.Resolved) side {
+	if l, ok := a.list("outpost_config"); ok && len(l) > 0 {
+		return unpriced("local cluster on AWS Outposts (outpost_config) is not modeled")
+	}
+	if sc, ok := a.first("control_plane_scaling_config"); ok {
+		if tier, _ := sc.str("tier"); tier != "" && tier != "standard" {
+			return unpriced("provisioned control plane tier %q is not modeled", tier)
+		}
+	}
+	cp := hourly("cluster control plane, standard support", keyEKSCluster, u, nil)
+	var s side
+	if u.ExtendedSupportHours.Declared {
+		s.comps = append(s.comps, cp, comp{name: "extended support", key: keyEKSExtended, qty: u.ExtendedSupportHours.V, unit: "h",
+			premise: "extended_support_hours", declared: true, rule: BillingUsage, note: "billed on top of the control plane hour"})
+	} else {
+		cp.note = "extended support not included; declare extended_support_hours for a version in extended support"
+		s.comps = append(s.comps, cp)
+	}
+	cc, ok := a.first("compute_config")
+	if on, _ := cc.boolean("enabled"); !ok || !on {
+		return s
+	}
+	am := u.AutoModeInstanceHours
+	if !am.Declared {
+		s.comps = append(s.comps, comp{name: "EKS Auto Mode management fee", qty: money.Zero(), unit: "h",
+			premise: "auto_mode_instance_hours", rule: BillingUsage,
+			note: "per instance type and hour of the nodes Auto Mode launches, which the plan does not carry"})
+		return s
+	}
+	for _, it := range am.Keys() {
+		s.comps = append(s.comps, comp{name: "EKS Auto Mode management fee, " + it, key: eksAutoModeKey(it), qty: am.V[it], unit: "h",
+			premise: "auto_mode_instance_hours", declared: true, rule: BillingUsage, note: "EC2 cost of the nodes not included"})
+	}
+	return s
 }
 
 func accessAnalyzer(a attrs, u usage.Resolved) side {

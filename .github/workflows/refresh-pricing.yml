@@ -1,7 +1,13 @@
 name: refresh-pricing
 
 # Weekly: download the public Price List Bulk API files (no AWS credential),
-# rebuild pricing/us-east-1.json and open a PR when a price changed.
+# rebuild every embedded snapshot (pricing/<region>.json) and open a PR only
+# when a price changed. A refresh that changes only as_of, sha256 or the
+# offer file versions opens nothing (scripts/pricing-diff.sh compares the
+# "prices" maps; a rule change shows up there as added or removed keys).
+# Every refresh uses one rolling branch, pricing/refresh, owned by the bot:
+# it is rewritten (force push) on each run and its open PR is updated, so a
+# reviewer finds one PR with the latest prices. Do not push to it by hand.
 # Requires "Allow GitHub Actions to create and approve pull requests" in the
 # repository settings. A PR opened with GITHUB_TOKEN creates the ci run in an
 # approval-required state: approve it from the PR merge box before merging
@@ -40,13 +46,14 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write # push the refresh branch (and delete the test branch)
-      pull-requests: write # open the PR (and close the test PR)
+      pull-requests: write # open or update the PR (and close the test PR)
       actions: read # dry run: read the ci run the test PR creates
     outputs:
       test_branch: ${{ steps.pr.outputs.branch }}
     env:
       DRY_RUN: ${{ inputs.dry_run_pr && 'true' || 'false' }}
       TEST_LABEL: pricing-refresh-test
+      BRANCH: pricing/refresh
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -57,11 +64,32 @@ jobs:
           go-version-file: go.mod
           cache: false
 
-      - name: refresh
-        run: go run ./cmd/costgate pricing refresh --region us-east-1 --out pricing/us-east-1.json
+      - name: refresh every embedded region
+        run: |
+          set -eu
+          go build -o "$RUNNER_TEMP/costgate" ./cmd/costgate
+          for f in pricing/*.json; do
+            r="$(basename "$f" .json)"
+            "$RUNNER_TEMP/costgate" pricing refresh --region "$r" --out "$f"
+            # The binary embeds the old snapshots: verify the new file explicitly.
+            "$RUNNER_TEMP/costgate" pricing verify --region "$r" --pricing "$f"
+          done
 
-      - name: test with the new snapshot
+      - name: test with the new snapshots
         run: go test -count=1 ./...
+
+      - name: compare prices
+        id: cmp
+        run: |
+          set -eu
+          rc=0
+          sh scripts/pricing-diff.sh HEAD > "$RUNNER_TEMP/price-diff.md" || rc=$?
+          cat "$RUNNER_TEMP/price-diff.md"
+          case "$rc" in
+            0) echo "changed=false" >> "$GITHUB_OUTPUT"; echo "no price changed; no PR" >> "$GITHUB_STEP_SUMMARY" ;;
+            1) echo "changed=true" >> "$GITHUB_OUTPUT"; cat "$RUNNER_TEMP/price-diff.md" >> "$GITHUB_STEP_SUMMARY" ;;
+            *) echo "pricing-diff failed ($rc)"; exit 1 ;;
+          esac
 
       # Synthetic, marked change. Applied after the tests, only on the test
       # branch; the PR is never merged.
@@ -76,39 +104,49 @@ jobs:
           mv "$f.tmp" "$f"
           git diff --stat -- pricing/
 
-      - name: open PR when prices changed
+      - name: open or update the refresh PR
         id: pr
+        if: steps.cmp.outputs.changed == 'true' || env.DRY_RUN == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.run_id }}
         run: |
           set -eu
-          if git diff --quiet -- pricing/; then echo "no change"; exit 0; fi
-          as_of="$(jq -r .as_of pricing/us-east-1.json)"
           if [ "$DRY_RUN" = true ]; then
             branch="pricing/refresh-test-${RUN_ID}"
             title="test(pricing): dry run of the refresh PR (run ${RUN_ID}), do not merge"
             body="Opened by refresh-pricing.yml with dry_run_pr=true to prove the PR path. The snapshot carries a synthetic test_marker field. The same run closes this PR and deletes the branch."
             label_args="--label ${TEST_LABEL}"
+            if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then echo "$branch exists"; exit 1; fi
           else
-            branch="pricing/refresh-${as_of%%T*}"
-            title="chore(pricing): refresh us-east-1 snapshot as of ${as_of}"
-            body="Automatic refresh from the public AWS Price List Bulk API. Review the price diff before merging."
+            branch="$BRANCH"
+            title="chore(pricing): refresh embedded price snapshots"
+            body="$(printf 'Automatic refresh from the public AWS Price List Bulk API (run %s). Prices that changed, by region:\n\n%s\n\nThis branch is rewritten by every refresh that finds a price change; review the price diff before merging.' "$RUN_ID" "$(cat "$RUNNER_TEMP/price-diff.md")")"
             label_args=""
           fi
-          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then echo "$branch exists"; exit 0; fi
           gh auth setup-git
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"
-          git add pricing/us-east-1.json
+          git add pricing/*.json
           git commit -m "$title"
-          git push origin "$branch"
+          if [ "$DRY_RUN" = true ]; then
+            git push origin "$branch"
+          else
+            # The rolling branch belongs to this workflow: replace its content.
+            git push --force origin "$branch"
+          fi
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          # shellcheck disable=SC2086 # label_args is empty or two words
-          url="$(gh pr create --base main --head "$branch" --title "$title" --body "$body" $label_args)"
+          url="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --base main --state open --json url --jq '.[0].url // ""')"
+          if [ -n "$url" ]; then
+            gh pr edit "$url" --title "$title" --body "$body"
+            echo "updated $url"
+          else
+            # shellcheck disable=SC2086 # label_args is empty or two words
+            url="$(gh pr create --base main --head "$branch" --title "$title" --body "$body" $label_args)"
+            echo "opened $url"
+          fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "opened $url"
 
       - name: verify test PR (dry run)
         if: env.DRY_RUN == 'true'

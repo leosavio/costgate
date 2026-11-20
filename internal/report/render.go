@@ -27,6 +27,45 @@ type Input struct {
 	Verdict  Verdict
 	Ceilings Ceilings
 	Pricing  *catalog.Snapshot
+	Warnings []Warning
+}
+
+// WarningRegionMismatch is the code of the warning RegionWarnings builds.
+const WarningRegionMismatch = "region_mismatch"
+
+// Warning is a top-level notice: part of the estimate is probably not what
+// the caller wants, and Fix says how to correct it.
+type Warning struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Fix     string `json:"fix"`
+}
+
+// RegionWarnings builds one warning per region the plan deploys to that
+// differs from the priced region. embedded reports whether the binary
+// carries a snapshot of a region.
+func RegionWarnings(res *estimate.Result, embedded func(region string) bool) []Warning {
+	var out []Warning
+	for _, m := range res.RegionMismatches {
+		from := ""
+		if m.Inferred {
+			from = " (region taken from the region attribute or ARNs of its resources)"
+		}
+		msg := fmt.Sprintf("provider configuration %s deploys to %s%s, but prices are for %s; %s in %s left unpriced (reason region)",
+			strings.Join(m.Providers, ", "), m.Region, from, res.Region,
+			plural(m.Resources, "resource", "resources"), m.Region)
+		var fix string
+		switch {
+		case embedded(m.Region):
+			fix = fmt.Sprintf("rerun with --region %s (embedded snapshot)", m.Region)
+		case catalog.RegionSupported(m.Region):
+			fix = fmt.Sprintf("run 'costgate pricing refresh --region %[1]s --out %[1]s.json', then rerun with --region %[1]s --pricing %[1]s.json", m.Region)
+		default:
+			fix = fmt.Sprintf("costgate has no snapshot of %[1]s and pricing refresh does not support it yet; price this plan with --region %[1]s --pricing <snapshot of %[1]s>", m.Region)
+		}
+		out = append(out, Warning{Code: WarningRegionMismatch, Message: msg, Fix: fix})
+	}
+	return out
 }
 
 func usd(r *big.Rat) string { return money.Fixed(r, 2) }
@@ -93,6 +132,9 @@ func Markdown(in Input) string {
 
 	icon := map[string]string{StatusOK: "✅", StatusOverCeiling: "❌", StatusUnpriced: "⚠️"}[v.Status]
 	w("%s\n### costgate: %s %s/month%s\n\n", Marker, icon, signedUSD(res.Delta), statusText(v.Status))
+	for _, wr := range in.Warnings {
+		w("> ⚠️ **Warning (`%s`):** %s.<br>**Fix:** %s.\n\n", wr.Code, wr.Message, wr.Fix)
+	}
 	w("| Monthly cost (USD) | Before | After | Delta |\n|---|---:|---:|---:|\n")
 	w("| Total | %s | %s | **%s** |\n\n", usd(res.Before), usd(res.After), money.Signed(res.Delta, 2))
 
@@ -160,6 +202,19 @@ func Markdown(in Input) string {
 		w("\n")
 	}
 
+	if len(res.IgnoredProviders) > 0 {
+		w("<details><summary>%s of ignored providers (<code>--ignore-provider %s</code>), left out of the gate</summary>\n\n",
+			plural(len(res.Ignored), "resource", "resources"), strings.Join(res.IgnoredProviders, ","))
+		if len(res.Ignored) > 0 {
+			w("| Resource | Action | Provider |\n|---|---|---|\n")
+			for _, ig := range res.Ignored {
+				w("| `%s` | %s | %s |\n", ig.Address, ig.Action, ig.Provider)
+			}
+			w("\n")
+		}
+		w("</details>\n\n")
+	}
+
 	if len(zeroChanged) > 0 {
 		w("<details><summary>%s with no charge</summary>\n\n", plural(len(zeroChanged), "changed resource", "changed resources"))
 		for _, r := range zeroChanged {
@@ -180,8 +235,12 @@ func Markdown(in Input) string {
 	if len(short) > 12 {
 		short = short[:12]
 	}
-	w("<sub>costgate %s · AWS Price List Bulk API snapshot `%s` as of %s (sha256 `%s`) · on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included.</sub>\n",
-		in.Version, p.Region, p.AsOf, short)
+	ignored := ""
+	if len(res.IgnoredProviders) > 0 {
+		ignored = fmt.Sprintf(" · `--ignore-provider %s`: %s left out of the gate", strings.Join(res.IgnoredProviders, ","), plural(len(res.Ignored), "resource", "resources"))
+	}
+	w("<sub>costgate %s · AWS Price List Bulk API snapshot `%s` as of %s (sha256 `%s`)%s · on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included.</sub>\n",
+		in.Version, p.Region, p.AsOf, short, ignored)
 	return b.String()
 }
 
@@ -266,9 +325,10 @@ type jsonLine struct {
 }
 
 type jsonSide struct {
-	Monthly  json.Number `json:"monthly"`
-	Unpriced string      `json:"unpriced,omitempty"`
-	Lines    []jsonLine  `json:"lines"`
+	Monthly        json.Number `json:"monthly"`
+	Unpriced       string      `json:"unpriced,omitempty"`
+	UnpricedReason string      `json:"unpriced_reason,omitempty"`
+	Lines          []jsonLine  `json:"lines"`
 }
 
 type jsonResource struct {
@@ -305,9 +365,13 @@ type jsonReport struct {
 	Status     string                     `json:"status"`
 	ExitCode   int                        `json:"exit_code"`
 	Reasons    []string                   `json:"reasons"`
+	Warnings   []Warning                  `json:"warnings,omitempty"`
 	Incomplete bool                       `json:"incomplete"`
 	Resources  []jsonResource             `json:"resources"`
 	Undeclared []estimate.UndeclaredUsage `json:"usage_not_declared"`
+	// Present only with --ignore-provider.
+	IgnoredProviders []string            `json:"ignored_providers,omitempty"`
+	Ignored          *[]estimate.Ignored `json:"ignored,omitempty"`
 }
 
 func num(r *big.Rat) json.Number { return json.Number(money.Fixed(r, 4)) }
@@ -338,7 +402,7 @@ func toJSONSide(s estimate.Side) *jsonSide {
 	if !s.Exists {
 		return nil
 	}
-	out := &jsonSide{Monthly: num(s.Monthly), Unpriced: s.Unpriced, Lines: []jsonLine{}}
+	out := &jsonSide{Monthly: num(s.Monthly), Unpriced: s.Unpriced, UnpricedReason: s.Reason, Lines: []jsonLine{}}
 	for _, l := range s.Lines {
 		out.Lines = append(out.Lines, toJSONLine(l))
 	}
@@ -370,6 +434,12 @@ func JSON(in Input) ([]byte, error) {
 	if r.Undeclared == nil {
 		r.Undeclared = []estimate.UndeclaredUsage{}
 	}
+	r.Warnings = in.Warnings
+	if len(res.IgnoredProviders) > 0 {
+		r.IgnoredProviders = res.IgnoredProviders
+		ignored := append([]estimate.Ignored{}, res.Ignored...)
+		r.Ignored = &ignored
+	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
@@ -380,8 +450,36 @@ func JSON(in Input) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// LineKind is the "kind" of every JSON Lines document.
-const LineKind = "costgate.line"
+// Kinds of JSON Lines documents. Cost lines are LineKind; the other kinds
+// appear only when there is a warning or --ignore-provider is set, so a
+// query over cost lines filters on kind.
+const (
+	LineKind    = "costgate.line"
+	WarningKind = "costgate.warning"
+	IgnoredKind = "costgate.ignored"
+)
+
+// jsonDocHeader is the part every JSON Lines document shares.
+type jsonDocHeader struct {
+	SchemaVersion int    `json:"schema_version"`
+	Kind          string `json:"kind"`
+	Tool          string `json:"tool"`
+	Version       string `json:"version"`
+	Region        string `json:"region"`
+	Currency      string `json:"currency"`
+	PricingAsOf   string `json:"pricing_as_of"`
+	PricingSHA256 string `json:"pricing_sha256"`
+}
+
+type jsonWarningDoc struct {
+	jsonDocHeader
+	Warning
+}
+
+type jsonIgnoredDoc struct {
+	jsonDocHeader
+	estimate.Ignored
+}
 
 // jsonLineDoc is one cost line with the report fields a standalone query
 // needs. The line fields are the same as in the JSON report.
@@ -403,11 +501,22 @@ type jsonLineDoc struct {
 
 // JSONLines renders one compact JSON document per cost line and per side
 // (before, then after), in the order of the report. Unpriced and zero-cost
-// resources have no cost line and appear only in the JSON report.
+// resources have no cost line and appear only in the JSON report. Warnings
+// come first (kind costgate.warning) and resources of ignored providers
+// last (kind costgate.ignored).
 func JSONLines(in Input) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
+	header := func(kind string) jsonDocHeader {
+		return jsonDocHeader{SchemaVersion: JSONSchemaVersion, Kind: kind, Tool: "costgate", Version: in.Version,
+			Region: in.Result.Region, Currency: "USD", PricingAsOf: in.Pricing.AsOf, PricingSHA256: in.Pricing.SHA256}
+	}
+	for _, wr := range in.Warnings {
+		if err := enc.Encode(jsonWarningDoc{header(WarningKind), wr}); err != nil {
+			return nil, err
+		}
+	}
 	for _, r := range in.Result.Resources {
 		for _, sd := range []struct {
 			name string
@@ -426,6 +535,11 @@ func JSONLines(in Input) ([]byte, error) {
 					return nil, err
 				}
 			}
+		}
+	}
+	for _, ig := range in.Result.Ignored {
+		if err := enc.Encode(jsonIgnoredDoc{header(IgnoredKind), ig}); err != nil {
+			return nil, err
 		}
 	}
 	return buf.Bytes(), nil

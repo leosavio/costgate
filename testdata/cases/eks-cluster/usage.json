@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "comment": "aws_eks_cluster.legacy runs 1.29 in extended support all month; aws_eks_cluster.batch turns on Auto Mode with two node types. module.eks has no Auto Mode premise and is listed as undeclared.",
+  "resources": {
+    "aws_eks_cluster.legacy": {"extended_support_hours": 730},
+    "aws_eks_cluster.batch": {"auto_mode_instance_hours": {"c6a.xlarge": 1460, "m7g.large": 365}}
+  }
+}

@@ -36,6 +36,11 @@
    "offerCode": "AWSCertificateManager",
    "currentVersionUrl": "/offers/v1.0/aws/AWSCertificateManager/current/index.json",
    "currentRegionIndexUrl": "/offers/v1.0/aws/AWSCertificateManager/current/region_index.json"
+  },
+  "AmazonEKS": {
+   "offerCode": "AmazonEKS",
+   "currentVersionUrl": "/offers/v1.0/aws/AmazonEKS/current/index.json",
+   "currentRegionIndexUrl": "/offers/v1.0/aws/AmazonEKS/current/region_index.json"
   }
  }
 }

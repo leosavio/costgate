@@ -1,0 +1,52 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.13.4",
+  "resource_changes": [
+    {
+      "address": "module.eks.aws_eks_cluster.this[0]",
+      "module_address": "module.eks",
+      "mode": "managed",
+      "type": "aws_eks_cluster",
+      "name": "this",
+      "index": 0,
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "spark-on-eks",
+          "version": "1.34",
+          "region": "us-east-1",
+          "compute_config": [{"enabled": true, "node_pools": ["general-purpose", "system"]}]
+        },
+        "after_unknown": {"arn": true, "endpoint": true, "compute_config": [{"node_role_arn": true}]}
+      }
+    },
+    {
+      "address": "aws_eks_cluster.legacy",
+      "mode": "managed",
+      "type": "aws_eks_cluster",
+      "name": "legacy",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["no-op"],
+        "before": {"name": "legacy", "version": "1.29", "region": "us-east-1", "compute_config": []},
+        "after": {"name": "legacy", "version": "1.29", "region": "us-east-1", "compute_config": []},
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "aws_eks_cluster.batch",
+      "mode": "managed",
+      "type": "aws_eks_cluster",
+      "name": "batch",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["update"],
+        "before": {"name": "batch", "version": "1.33", "region": "us-east-1", "compute_config": []},
+        "after": {"name": "batch", "version": "1.33", "region": "us-east-1", "compute_config": [{"enabled": true, "node_pools": ["general-purpose"]}]},
+        "after_unknown": {}
+      }
+    }
+  ]
+}

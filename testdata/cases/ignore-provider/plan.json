@@ -1,0 +1,89 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.13.4",
+  "resource_changes": [
+    {
+      "address": "aws_eip.ingress",
+      "mode": "managed",
+      "type": "aws_eip",
+      "name": "ingress",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"domain": "vpc"},
+        "after_unknown": {"allocation_id": true, "arn": true, "public_ip": true}
+      }
+    },
+    {
+      "address": "aws_lb.legacy",
+      "mode": "managed",
+      "type": "aws_lb",
+      "name": "legacy",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["no-op"],
+        "before": {"name": "legacy", "load_balancer_type": "application"},
+        "after": {"name": "legacy", "load_balancer_type": "application"},
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.eks_data_addons.helm_release.kubecost[0]",
+      "module_address": "module.eks_data_addons",
+      "mode": "managed",
+      "type": "helm_release",
+      "name": "kubecost",
+      "index": 0,
+      "provider_name": "registry.terraform.io/hashicorp/helm",
+      "change": {
+        "actions": ["update"],
+        "before": {"name": "kubecost", "namespace": "kubecost", "version": "2.8.3"},
+        "after": {"name": "kubecost", "namespace": "kubecost", "version": "2.8.4"},
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.eks_data_addons.kubectl_manifest.nodeclass[\"spark\"]",
+      "module_address": "module.eks_data_addons",
+      "mode": "managed",
+      "type": "kubectl_manifest",
+      "name": "nodeclass",
+      "index": "spark",
+      "provider_name": "registry.terraform.io/alekc/kubectl",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"yaml_body": "apiVersion: eks.amazonaws.com/v1\nkind: NodeClass\nmetadata:\n  name: spark\n"},
+        "after_unknown": {"id": true, "uid": true}
+      }
+    },
+    {
+      "address": "module.eks_data_addons.kubernetes_namespace.spark",
+      "module_address": "module.eks_data_addons",
+      "mode": "managed",
+      "type": "kubernetes_namespace",
+      "name": "spark",
+      "provider_name": "registry.terraform.io/hashicorp/kubernetes",
+      "change": {
+        "actions": ["no-op"],
+        "before": {"metadata": [{"name": "spark-team-a"}]},
+        "after": {"metadata": [{"name": "spark-team-a"}]},
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "random_password.grafana",
+      "mode": "managed",
+      "type": "random_password",
+      "name": "grafana",
+      "provider_name": "registry.terraform.io/hashicorp/random",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"length": 16},
+        "after_unknown": {"result": true}
+      }
+    }
+  ]
+}

@@ -16,6 +16,46 @@ type Plan struct {
 	FormatVersion    string           `json:"format_version"`
 	TerraformVersion string           `json:"terraform_version"`
 	ResourceChanges  []ResourceChange `json:"resource_changes"`
+	Configuration    Configuration    `json:"configuration"`
+
+	// configKeys maps a resource address without instance keys
+	// ("module.vpc.aws_eip.nat") to its provider_config_key.
+	configKeys map[string]string
+}
+
+// Configuration is the subset of the "configuration" section costgate uses:
+// provider configurations and the provider of each configured resource.
+type Configuration struct {
+	ProviderConfig map[string]ProviderConfig `json:"provider_config"`
+	RootModule     ConfigModule              `json:"root_module"`
+}
+
+// ProviderConfig is one entry of configuration.provider_config.
+type ProviderConfig struct {
+	Name          string         `json:"name"`
+	FullName      string         `json:"full_name"`
+	Alias         string         `json:"alias"`
+	ModuleAddress string         `json:"module_address"`
+	Expressions   map[string]any `json:"expressions"`
+}
+
+// ConfigModule is a module of the configuration tree.
+type ConfigModule struct {
+	Resources   []ConfigResource      `json:"resources"`
+	ModuleCalls map[string]ModuleCall `json:"module_calls"`
+}
+
+// ConfigResource is a resource block of the configuration. Address is
+// relative to its module.
+type ConfigResource struct {
+	Address           string `json:"address"`
+	Mode              string `json:"mode"`
+	ProviderConfigKey string `json:"provider_config_key"`
+}
+
+// ModuleCall is a module block of the configuration.
+type ModuleCall struct {
+	Module ConfigModule `json:"module"`
 }
 
 // ResourceChange is one entry of resource_changes.
@@ -99,5 +139,72 @@ func Parse(r io.Reader) (*Plan, error) {
 	sort.SliceStable(p.ResourceChanges, func(i, j int) bool {
 		return p.ResourceChanges[i].Address < p.ResourceChanges[j].Address
 	})
+	p.configKeys = map[string]string{}
+	indexConfig(p.configKeys, "", p.Configuration.RootModule)
 	return &p, nil
+}
+
+func indexConfig(keys map[string]string, prefix string, m ConfigModule) {
+	for _, r := range m.Resources {
+		if r.ProviderConfigKey != "" {
+			keys[prefix+r.Address] = r.ProviderConfigKey
+		}
+	}
+	for name, call := range m.ModuleCalls {
+		indexConfig(keys, prefix+"module."+name+".", call.Module)
+	}
+}
+
+// ProviderConfigKey returns the provider_config_key of the configuration
+// block behind a resource change address, or "" when the plan has no
+// configuration section for it.
+func (p *Plan) ProviderConfigKey(address string) string {
+	return p.configKeys[ConfigAddress(address)]
+}
+
+// ProviderRegion returns the region of a provider configuration when it is
+// a constant in the configuration (region = "us-west-2"). A region from a
+// variable, a local or an environment variable is not in the plan.
+func (p *Plan) ProviderRegion(key string) (string, bool) {
+	pc, ok := p.Configuration.ProviderConfig[key]
+	if !ok {
+		return "", false
+	}
+	expr, _ := pc.Expressions["region"].(map[string]any)
+	r, _ := expr["constant_value"].(string)
+	return r, r != ""
+}
+
+// ConfigAddress removes the instance keys of an address:
+// module.eks["a"].aws_kms_key.this[0] becomes module.eks.aws_kms_key.this.
+func ConfigAddress(address string) string {
+	var b strings.Builder
+	depth, inString, escaped := 0, false, false
+	for _, c := range address {
+		switch {
+		case inString:
+			switch {
+			case escaped:
+				escaped = false
+			case c == '\\':
+				escaped = true
+			case c == '"':
+				inString = false
+			}
+		case depth > 0:
+			switch c {
+			case '"':
+				inString = true
+			case '[':
+				depth++
+			case ']':
+				depth--
+			}
+		case c == '[':
+			depth = 1
+		default:
+			b.WriteRune(c)
+		}
+	}
+	return b.String()
 }
