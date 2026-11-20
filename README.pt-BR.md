@@ -19,6 +19,8 @@ recurso sem preço conhecido. Binário único em Go, offline, sem credencial AWS
 - Saída em Markdown (comentário de PR), JSON e JSON Lines. Cada linha de custo traz as chaves da
   fatura da AWS (SKU, usage type, rate code, descrição da fatura), para casar com o Cost and Usage
   Report.
+- [Relatório HTML](#relatório-html) opcional: um arquivo autocontido para auditar um plan grande
+  offline, com filtros e exportação em CSV ou JSON Lines das linhas filtradas.
 
 Decisões: [ADR-001 (Go, snapshot da Bulk API e fail-closed)](docs/adr/001-go-snapshot-bulk-api-e-fail-closed.md).
 
@@ -39,6 +41,7 @@ flowchart LR
     usage["usage.json<br/>premissas, opcional"] --> diff
     diff --> md["Markdown<br/>comentário do PR"]
     diff --> js["relatório JSON<br/>e JSON Lines"]
+    diff --> html["relatório HTML<br/>um arquivo, opcional"]
     diff --> code["exit code<br/>0, 1, 2 ou 3"]
   end
   bin --> diff
@@ -141,6 +144,7 @@ costgate diff --plan - --format json < plan.json
 | `--format` | `markdown` | `markdown` ou `json` no stdout |
 | `--markdown-out`, `--json-out` | — | grava também em arquivo |
 | `--json-lines` | — | grava também um documento JSON por linha de custo ([JSON Lines](#json-lines)) |
+| `--html-out` | — | grava também um relatório HTML autocontido em arquivo ([Relatório HTML](#relatório-html)); stdout e exit code não mudam |
 
 | Exit | Significado |
 |---|---|
@@ -386,6 +390,44 @@ embutido:
 {"schema_version":1,"kind":"costgate.line","tool":"costgate","version":"0.2.0","region":"us-east-1","currency":"USD","pricing_as_of":"2026-11-03T00:09:47Z","pricing_sha256":"b27de59b08836c188cfa5bb1c758b2246392b90280def70f26d1c49f27daa0be","address":"module.dns.aws_route53_zone.this[\"example.com\"]","type":"aws_route53_zone","action":"no-op","side":"after","name":"hosted zone","price_key":"AmazonRoute53|HostedZone|","sku":"KVPGEJE88UW8S779","usage_type":"HostedZone","rate_code":"KVPGEJE88UW8S779.JRTCKXETXF.G2A93NZ7DT","billing_description":"$0.50 per Hosted Zone for the first 25 Hosted Zones","billing_rule":"fixed_monthly","unit_price":0.5,"quantity":1,"unit":"zone-month","monthly":0.5000,"declared":true,"note":"first-25-zones tier"}
 ```
 
+## Relatório HTML
+
+```sh
+costgate diff --plan plan.json --usage usage.json --max-monthly-delta 50 --html-out costgate.html
+```
+
+O comentário em Markdown serve para decidir um pull request em segundos. O relatório HTML serve
+para auditar um plan grande: um arquivo que se abre no navegador, sem servidor e sem rede.
+
+![Relatório HTML de testdata/cases/baseline, com um recurso aberto](docs/images/html-report.png)
+
+| Seção | O que mostra |
+|---|---|
+| Cabeçalho e gate | status e exit code, totais antes, depois e delta, cada teto com o resultado, os motivos do exit code, região, `as_of` e sha256 do snapshot, versão do costgate |
+| Avisos | cada item de `warnings[]` do relatório JSON (`region_mismatch`) com a correção, acima de tudo; some quando não há aviso |
+| Custo por módulo e por tipo | barras do custo mensal depois da mudança, ou do delta, por módulo (prefixo do endereço: `module.net`, `module.app["a"].module.db`, `(root)`) e por tipo de recurso; o clique filtra a tabela |
+| Recursos | filtro por texto (endereço, tipo, SKU, usage type, rate code), ação, alterados, que bloqueiam, não precificados ou com premissa faltando; a linha abre as linhas de custo com fórmula, `billing_rule`, SKU, usage type, rate code e descrição da fatura, de cada lado |
+| Recursos não precificados | agrupados por `unpriced_reason` (`provider`, `type`, `region`, `price`, `config`), cada um marcado como bloqueia ou não bloqueia o gate |
+| Premissas de uso | linhas cuja quantidade é premissa: as que faltam (contadas como 0, com o custo de uma unidade) e as declaradas (com o valor no total) |
+| Região de preço | a região precificada, a região do snapshot, os avisos de região e todo recurso não precificado por estar em outra região |
+| Providers ignorados | com `--ignore-provider`: os providers passados e cada recurso deixado de fora (endereço, tipo, provider, ação) |
+| Exportar | as linhas de custo dos recursos filtrados em CSV ou JSON Lines, baixadas pela própria página; mesmos campos e valores do `--json-lines` |
+
+Os filtros ficam no fragmento da URL (`#type=aws_nat_gateway&show=changed`), então uma visão
+filtrada pode ser recarregada ou compartilhada junto com o arquivo. A página tem as mesmas garantias
+das outras saídas:
+
+- **Mesmos dados do relatório JSON**: a página embute o relatório JSON da execução, codificado com
+  `json.Marshal`, mais os valores já formatados pelo costgate com decimal exato. O script não faz
+  conta com dinheiro.
+- **Sem rede**: CSS e JavaScript inline; a `Content-Security-Policy` é `default-src 'none'` e só
+  libera o estilo e o script inline pelo sha256 de cada um.
+- **Texto do plan é dado**: entra na página por `textContent`; um endereço como
+  `aws_s3_bucket.b["</script><img src=x>"]` aparece como texto
+  ([`testdata/cases/escape`](testdata/cases/escape)).
+- **Determinístico**: sem relógio (as datas vêm do snapshot), então o mesmo plan com as mesmas
+  premissas gera os mesmos bytes, em arm64 e amd64. Os goldens são `testdata/cases/*/want.html`.
+
 ## Atualizar preços
 
 ```sh
@@ -473,6 +515,7 @@ separado (o único com `actions: write`) o apaga.
 ```sh
 go vet ./... && staticcheck ./... && go test -race ./...
 go test ./internal/cli -update      # regrava golden files de testdata/ (revise o diff)
+bash scripts/html-check.sh          # abre cada relatório HTML golden no Chrome headless
 ```
 
 Guia curto: [CONTRIBUTING.md](CONTRIBUTING.md) (em inglês). Licença: [MIT](LICENSE).

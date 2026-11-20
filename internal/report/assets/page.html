@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="__CSP__">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="costgate __VERSION__">
+<title>costgate report</title>
+<style>__CSS__</style>
+</head>
+<body data-status="loading">
+<header class="top">
+  <div class="brand"><h1>costgate</h1><span id="version" class="muted"></span></div>
+  <div id="gate" class="gate"></div>
+  <div id="totals" class="totals"></div>
+  <div id="snapshot" class="snapshot"></div>
+</header>
+<noscript><p class="note">This page renders its data with an inline script and makes no network request. The same data is in the JSON report (costgate diff --format json).</p></noscript>
+<main class="layout">
+  <div class="col-main">
+    <section class="card warnings" id="warnings" hidden></section>
+    <section class="card" id="charts">
+      <div class="card-head"><h2>Monthly cost by module and by resource type</h2><div class="seg" id="metric"></div></div>
+      <p class="muted small">Click a bar to filter the resources. Unpriced resources count as 0 in these totals and are flagged.</p>
+      <div class="charts">
+        <div><h3>Module</h3><div id="byModule" class="bars"></div></div>
+        <div><h3>Resource type</h3><div id="byType" class="bars"></div></div>
+      </div>
+    </section>
+    <section class="card" id="resources">
+      <div class="card-head"><h2>Resources</h2><span id="count" class="muted"></span></div>
+      <div class="filters">
+        <input type="search" id="q" placeholder="filter: address, type, SKU, usage type…" aria-label="filter by address, type, SKU, usage type or rate code">
+        <select id="action" aria-label="action"></select>
+        <div class="seg" id="show"></div>
+        <span id="pills"></span>
+        <span class="spacer"></span>
+        <span class="muted small">export the filtered cost lines</span>
+        <button type="button" id="exportCSV">CSV</button>
+        <button type="button" id="exportJSONL">JSON Lines</button>
+      </div>
+      <table class="grid">
+        <thead><tr><th>Resource</th><th>Action</th><th class="num">Before</th><th class="num">After</th><th class="num">Delta</th><th>Cost lines</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+  </div>
+  <aside class="col-side">
+    <section class="card" id="checks"></section>
+    <section class="card" id="unpriced"></section>
+    <section class="card" id="premises"></section>
+    <section class="card" id="region"></section>
+    <section class="card" id="ignored" hidden></section>
+    <section class="card" id="sources"></section>
+  </aside>
+</main>
+<footer id="foot" class="muted small"></footer>
+<script>__JS__</script>
+<script type="application/json" id="costgate-data">__DATA__</script>
+</body>
+</html>

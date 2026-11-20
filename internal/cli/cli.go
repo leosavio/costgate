@@ -163,6 +163,7 @@ func runDiff(args []string, env Env) int {
 	jsonOut := fs.String("json-out", "", "also write the JSON report to this file")
 	jsonLinesOut := fs.String("json-lines", "", "also write one JSON document per cost line to this file (JSON Lines, for Athena or jq)")
 	mdOut := fs.String("markdown-out", "", "also write the Markdown report to this file")
+	htmlOut := fs.String("html-out", "", "also write a self-contained HTML report to this file (inline data, no network)")
 	var maxDelta, maxTotal ratFlag
 	fs.Var(&maxDelta, "max-monthly-delta", "fail (exit 1) when the monthly delta in USD is above this value")
 	fs.Var(&maxTotal, "max-monthly-total", "fail (exit 1) when the monthly total after the change is above this value")
@@ -239,6 +240,15 @@ func runDiff(args []string, env Env) int {
 	}
 	if *mdOut != "" {
 		if err := os.WriteFile(*mdOut, []byte(md), 0o644); err != nil {
+			return fail(env, err)
+		}
+	}
+	if *htmlOut != "" {
+		page, err := report.HTML(in)
+		if err != nil {
+			return fail(env, err)
+		}
+		if err := os.WriteFile(*htmlOut, page, 0o644); err != nil {
 			return fail(env, err)
 		}
 	}

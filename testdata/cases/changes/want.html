@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Vx/UjQKnm5yuy013yzlkRsUgg9E991h3P8YCJTscAV4='; style-src 'sha256-Ux6VWQGxJj6F/jdNxCguJPzkvu8SqNrRHf+T1p+neok='; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="costgate test">
+<title>costgate report</title>
+<style>:root {
+  --bg: #f6f7f9; --card: #fff; --fg: #1d2330; --muted: #5d6675; --line: #e3e6eb; --soft: #f0f2f5;
+  --accent: #2f5fd0; --ok: #1f7a43; --ok-bg: #e5f4ea; --warn: #9a5b00; --warn-bg: #fdf1dc;
+  --bad: #b3261e; --bad-bg: #fbe7e5; --up: #c2410c; --down: #15803d; --bar: #6b8fe6;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11141a; --card: #1a1f27; --fg: #e3e7ee; --muted: #9aa3b2; --line: #2c333e; --soft: #222833;
+    --accent: #8fb0ff; --ok: #6fd39a; --ok-bg: #173323; --warn: #f2c06b; --warn-bg: #3a2b10;
+    --bad: #ff8a80; --bad-bg: #3d1a18; --up: #fb923c; --down: #4ade80; --bar: #5b7fd6;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+h1, h2, h3 { margin: 0; font-weight: 600; }
+h1 { font-size: 18px; }
+h2 { font-size: 14px; }
+h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 4px 0 6px; }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.note { margin: 16px 24px; padding: 10px 12px; background: var(--warn-bg); color: var(--warn); border-radius: 6px; }
+[hidden] { display: none !important; }
+.card.warnings { background: var(--warn-bg); border-color: var(--warn); }
+.list li .mono { word-break: break-all; }
+.warning { padding: 6px 0; border-top: 1px solid var(--line); word-break: break-word; }
+.card-head + .warning { border-top: 0; }
+.warning code { word-break: break-all; }
+.warn-code { color: var(--warn); font-weight: 600; }
+
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 24px; background: var(--card); border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: baseline; gap: 8px; }
+.gate { display: flex; align-items: center; gap: 10px; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.gate .badge { font-size: 13px; padding: 4px 12px; }
+.st-ok { background: var(--ok-bg); color: var(--ok); }
+.st-over_ceiling { background: var(--bad-bg); color: var(--bad); }
+.st-unpriced { background: var(--warn-bg); color: var(--warn); }
+.headline { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.totals { display: flex; gap: 20px; }
+.total .lbl { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.total .val { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.snapshot { margin-left: auto; text-align: right; color: var(--muted); font-size: 12px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; padding: 16px 24px; align-items: start; }
+.col-main, .col-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.card p { margin: 4px 0 8px; }
+@media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.bars { max-height: 236px; overflow-y: auto; padding-right: 4px; }
+.bar { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(60px, 1fr) 78px; grid-template-rows: auto auto; column-gap: 8px; width: 100%; padding: 4px 6px; margin: 0 0 2px; border: 1px solid transparent; border-radius: 6px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.bar:hover { background: var(--soft); }
+.bar.on { border-color: var(--accent); background: var(--soft); }
+.bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.bar-track { align-self: center; height: 10px; background: var(--soft); border-radius: 3px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: var(--bar); border-radius: 3px; }
+.bar-fill.up { background: var(--up); }
+.bar-fill.down { background: var(--down); }
+.bar-value { font-weight: 600; }
+.bar-meta { grid-column: 1 / -1; font-size: 11px; color: var(--muted); }
+.bar-meta .warn { color: var(--warn); font-weight: 600; }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-right: 1px solid var(--line); border-radius: 0; }
+.seg button:last-child { border-right: 0; }
+button, select, input { font: inherit; color: inherit; }
+button { padding: 4px 10px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+button:hover { background: var(--soft); }
+button.on { background: var(--accent); color: #fff; }
+select, input[type=search] { padding: 4px 8px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+input[type=search] { width: 320px; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 10px; }
+.spacer { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; margin-right: 4px; background: var(--soft); border: 1px solid var(--accent); border-radius: 999px; font-size: 12px; }
+.pill button { padding: 0 6px; border: 0; background: none; }
+
+table { border-collapse: collapse; width: 100%; }
+.grid th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--card); }
+.grid th.num { text-align: right; }
+.grid td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.grid tr.res { cursor: pointer; }
+.grid tr.res:hover td { background: var(--soft); }
+.grid tr.res.open td { background: var(--soft); }
+.addr { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+.addr::before { content: "▸ "; color: var(--muted); }
+tr.open .addr::before { content: "▾ "; }
+.type { display: block; color: var(--muted); font-size: 11px; }
+.act { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--soft); white-space: nowrap; }
+.act-create { color: var(--up); } .act-delete { color: var(--down); }
+.act-update, .act-replace { color: var(--accent); }
+.up { color: var(--up); } .down { color: var(--down); }
+.flag { color: var(--warn); font-weight: 600; }
+.block { color: var(--bad); font-weight: 600; }
+.detail td { background: var(--bg); padding: 8px 12px 12px 28px; }
+.side-head { margin: 6px 0 4px; font-weight: 600; }
+.lines th { font-size: 11px; color: var(--muted); text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+.lines td { padding: 3px 6px; border-bottom: 1px solid var(--line); font-size: 12px; vertical-align: top; }
+.lines td.mono { overflow-wrap: anywhere; }
+.lines td:first-child { min-width: 120px; }
+
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { padding: 6px 0; border-top: 1px solid var(--line); }
+.list li:first-child { border-top: 0; }
+.link { padding: 0; border: 0; background: none; color: var(--accent); text-align: left; cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; word-break: break-all; }
+.link:hover { background: none; text-decoration: underline; }
+.link.more { margin-top: 4px; font-family: inherit; }
+.group { margin-top: 10px; }
+.group-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.group-head span { white-space: nowrap; }
+
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 4px 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; word-break: break-all; }
+.checks { margin-top: 4px; }
+.checks th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); padding: 3px 6px; border-bottom: 1px solid var(--line); }
+.checks td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.pass { color: var(--ok); font-weight: 600; }
+.failc { color: var(--bad); font-weight: 600; }
+.reasons { margin: 0; padding-left: 18px; }
+footer { padding: 4px 24px 24px; }
+</style>
+</head>
+<body data-status="loading">
+<header class="top">
+  <div class="brand"><h1>costgate</h1><span id="version" class="muted"></span></div>
+  <div id="gate" class="gate"></div>
+  <div id="totals" class="totals"></div>
+  <div id="snapshot" class="snapshot"></div>
+</header>
+<noscript><p class="note">This page renders its data with an inline script and makes no network request. The same data is in the JSON report (costgate diff --format json).</p></noscript>
+<main class="layout">
+  <div class="col-main">
+    <section class="card warnings" id="warnings" hidden></section>
+    <section class="card" id="charts">
+      <div class="card-head"><h2>Monthly cost by module and by resource type</h2><div class="seg" id="metric"></div></div>
+      <p class="muted small">Click a bar to filter the resources. Unpriced resources count as 0 in these totals and are flagged.</p>
+      <div class="charts">
+        <div><h3>Module</h3><div id="byModule" class="bars"></div></div>
+        <div><h3>Resource type</h3><div id="byType" class="bars"></div></div>
+      </div>
+    </section>
+    <section class="card" id="resources">
+      <div class="card-head"><h2>Resources</h2><span id="count" class="muted"></span></div>
+      <div class="filters">
+        <input type="search" id="q" placeholder="filter: address, type, SKU, usage type…" aria-label="filter by address, type, SKU, usage type or rate code">
+        <select id="action" aria-label="action"></select>
+        <div class="seg" id="show"></div>
+        <span id="pills"></span>
+        <span class="spacer"></span>
+        <span class="muted small">export the filtered cost lines</span>
+        <button type="button" id="exportCSV">CSV</button>
+        <button type="button" id="exportJSONL">JSON Lines</button>
+      </div>
+      <table class="grid">
+        <thead><tr><th>Resource</th><th>Action</th><th class="num">Before</th><th class="num">After</th><th class="num">Delta</th><th>Cost lines</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+  </div>
+  <aside class="col-side">
+    <section class="card" id="checks"></section>
+    <section class="card" id="unpriced"></section>
+    <section class="card" id="premises"></section>
+    <section class="card" id="region"></section>
+    <section class="card" id="ignored" hidden></section>
+    <section class="card" id="sources"></section>
+  </aside>
+</main>
+<footer id="foot" class="muted small"></footer>
+<script>// costgate HTML report. Renders the JSON report of the run (data.report) with the display values
+// costgate computed with exact decimals (data.view): this script formats no amount and does no
+// arithmetic on money. Strings from the plan reach the page only through textContent, never
+// innerHTML. No network: the CSV and JSON Lines exports are Blob downloads.
+(function () {
+  "use strict";
+
+  var body = document.body;
+  function fail(msg) { body.setAttribute("data-status", "error: " + msg); }
+  window.addEventListener("error", function (e) { fail(e.message + " (line " + e.lineno + ")"); });
+  document.addEventListener("securitypolicyviolation", function (e) {
+    fail("csp " + e.effectiveDirective + " " + (e.blockedURI || "inline"));
+  });
+
+  var ACTIONS = ["create", "update", "replace", "delete", "forget", "no-op"];
+  var SHOWS = [["all", "all"], ["changed", "changed"], ["blocking", "blocks the gate"],
+    ["unpriced", "unpriced"], ["premise", "premise missing"]];
+  var METRICS = [["after", "monthly after"], ["delta", "delta"]];
+  var KEYS = ["q", "action", "show", "why", "module", "type", "metric", "open"];
+  var DEFAULTS = { q: "", action: "", show: "all", why: "", module: "", type: "", metric: "after", open: "" };
+  var LIMIT = 8; // entries listed per group in the side panels; the rest is one click away in the table
+
+  var R, V, rows, st, why = {};
+
+  // ---- helpers
+  function $(id) { return document.getElementById(id); }
+  function el(tag, attrs, text) {
+    var e = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      if (k === "class") e.className = attrs[k]; else e.setAttribute(k, attrs[k]);
+    });
+    if (text !== undefined && text !== null) e.textContent = String(text);
+    return e;
+  }
+  function add(parent, tag, attrs, text) { var e = el(tag, attrs, text); parent.appendChild(e); return e; }
+  function text(parent, s) { parent.appendChild(document.createTextNode(s)); }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  function signClass(s) { return s.charAt(0) === "+" ? "up" : s.charAt(0) === "-" ? "down" : ""; }
+  function shownSide(r) { return r.after || r.before; }
+  function viewSide(i, side) {
+    return V.resources[i].sides.filter(function (s) { return s.side === side; })[0];
+  }
+  function cardHead(box, title, note) {
+    var h = add(box, "div", { class: "card-head" });
+    add(h, "h2", null, title);
+    if (note) add(h, "span", { class: "muted small" }, note);
+  }
+  function kv(dl, k, v, cls) {
+    add(dl, "dt", null, k);
+    add(dl, "dd", cls ? { class: cls } : null, v);
+  }
+
+  // ---- state in the URL hash, so a filtered view can be shared or reloaded
+  function readHash() {
+    var s = {};
+    KEYS.forEach(function (k) { s[k] = DEFAULTS[k]; });
+    location.hash.replace(/^#/, "").split("&").forEach(function (kv) {
+      if (!kv) return;
+      var i = kv.indexOf("="), k = i < 0 ? kv : kv.slice(0, i), v = i < 0 ? "" : kv.slice(i + 1);
+      try { v = decodeURIComponent(v); } catch (e) { return; }
+      if (KEYS.indexOf(k) >= 0) s[k] = v;
+    });
+    if (ACTIONS.indexOf(s.action) < 0) s.action = "";
+    if (!SHOWS.some(function (x) { return x[0] === s.show; })) s.show = "all";
+    if (s.metric !== "delta") s.metric = "after";
+    if (!V.unpriced.some(function (g) { return g.category === s.why; })) s.why = "";
+    return s;
+  }
+  function hashOf(s) {
+    return KEYS.filter(function (k) { return s[k] !== DEFAULTS[k]; })
+      .map(function (k) { return k + "=" + encodeURIComponent(s[k]); }).join("&");
+  }
+  function writeHash() {
+    var h = hashOf(st);
+    if (location.hash.replace(/^#/, "") !== h) location.replace("#" + h);
+  }
+
+  // ---- rows: one per resource of the report, in report order
+  function buildRows() {
+    var missing = {};
+    V.unpriced.forEach(function (g) {
+      g.resources.forEach(function (i) { why[i] = g.category; });
+    });
+    V.premises.forEach(function (p) {
+      if (!R.resources[p.resource][p.side].lines[p.line].declared) missing[p.resource] = true;
+    });
+    return R.resources.map(function (r, i) {
+      var words = [r.address, r.type];
+      ["before", "after"].forEach(function (s) {
+        if (!r[s]) return;
+        words.push(r[s].unpriced);
+        r[s].lines.forEach(function (l) {
+          words.push(l.name, l.price_key, l.sku, l.usage_type, l.rate_code, l.billing_description);
+        });
+      });
+      return {
+        i: i, r: r, v: V.resources[i], missing: !!missing[i],
+        reason: (r.after && r.after.unpriced) || (r.before && r.before.unpriced) || "",
+        text: words.filter(Boolean).join("\n").toLowerCase()
+      };
+    });
+  }
+
+  // match applies the filters; skip leaves one out, to count the choices of that filter.
+  function match(row, skip) {
+    var r = row.r;
+    if (st.module && row.v.module !== st.module) return false;
+    if (st.type && r.type !== st.type) return false;
+    if (st.why && why[row.i] !== st.why) return false;
+    if (skip !== "action" && st.action && r.action !== st.action) return false;
+    if (skip !== "show") {
+      if (st.show === "changed" && r.action === "no-op") return false;
+      if (st.show === "blocking" && !r.blocking) return false;
+      if (st.show === "unpriced" && row.v.kind !== "unpriced") return false;
+      if (st.show === "premise" && !row.missing) return false;
+    }
+    if (st.q && row.text.indexOf(st.q.toLowerCase()) < 0) return false;
+    return true;
+  }
+  function filtered() { return rows.filter(function (row) { return match(row); }); }
+
+  function focus(row) {
+    KEYS.forEach(function (k) { st[k] = DEFAULTS[k]; });
+    st.q = row.r.address;
+    st.open = row.r.address;
+    render();
+    $("resources").scrollIntoView();
+  }
+  function resourceLink(parent, row) {
+    var b = add(parent, "button", { type: "button", class: "link", title: "show in the resource table" }, row.r.address);
+    b.addEventListener("click", function () { focus(row); });
+  }
+  // showAll adds a button that resets the filters, applies set and scrolls to the table.
+  function showAll(parent, label, set) {
+    var b = add(parent, "button", { type: "button", class: "link more" }, label);
+    b.addEventListener("click", function () {
+      KEYS.forEach(function (k) { st[k] = DEFAULTS[k]; });
+      set(st);
+      render();
+      $("resources").scrollIntoView();
+    });
+  }
+
+  // ---- (1) header: gate, totals, snapshot
+  function header() {
+    $("version").textContent = R.version;
+    document.title = "costgate · " + V.status_text.headline + " · " + V.status_text.title;
+    var g = $("gate");
+    add(g, "span", { class: "badge st-" + R.status }, V.status_text.title + " · exit " + R.exit_code);
+    add(g, "span", { class: "headline " + signClass(V.totals.delta) }, V.status_text.headline);
+    var t = $("totals");
+    [["before", V.totals.before], ["after", V.totals.after], ["delta", V.totals.delta]].forEach(function (x) {
+      var d = add(t, "div", { class: "total" });
+      add(d, "span", { class: "lbl" }, x[0] + " · USD/month");
+      add(d, "span", { class: "val " + (x[0] === "delta" ? signClass(x[1]) : "") }, x[1]);
+    });
+    var s = $("snapshot");
+    add(s, "div", null, "AWS Price List snapshot " + V.region.snapshot + " · as of " + R.pricing.as_of);
+    add(s, "div", { class: "mono", title: R.pricing.sha256 }, "sha256 " + V.sha256_short + " · priced region " + R.region);
+  }
+
+  function checksCard() {
+    var box = $("checks");
+    cardHead(box, "Gate", "exit " + R.exit_code + (R.incomplete ? " · estimate incomplete" : ""));
+    var t = add(box, "table", { class: "checks" }), h = add(t, "tr");
+    ["Check", "Limit", "Result"].forEach(function (x) { add(h, "th", null, x); });
+    V.checks.forEach(function (c) {
+      var tr = add(t, "tr");
+      add(add(tr, "td"), c.flag ? "code" : "span", null, c.name);
+      add(tr, "td", { class: "num" }, c.limit);
+      add(tr, "td", { class: c.ok ? "pass" : "failc" }, (c.ok ? "✓ " : "✗ ") + c.value);
+    });
+    if (R.reasons.length) {
+      add(box, "p", { class: "small" }, "Exit " + R.exit_code + ":");
+      var ul = add(box, "ul", { class: "reasons small" });
+      R.reasons.forEach(function (x) { add(ul, "li", null, x); });
+    }
+  }
+
+  // ---- (2) bars by module and by type
+  function bars(box, groups, key) {
+    box.textContent = "";
+    var list = groups.map(function (g, i) { return { g: g, i: i }; });
+    if (st.metric === "delta") list.sort(function (a, b) { return b.g.bar_delta - a.g.bar_delta || a.i - b.i; });
+    list.forEach(function (x) {
+      var g = x.g, on = st[key] === g.key, delta = st.metric === "delta";
+      var b = add(box, "button", { type: "button", class: "bar" + (on ? " on" : ""), title: key + " " + g.key });
+      add(b, "span", { class: "bar-label" }, g.key);
+      var fill = add(add(b, "span", { class: "bar-track" }), "span", { class: "bar-fill " + (delta ? signClass(g.delta) : "") });
+      fill.style.width = (delta ? g.bar_delta : g.bar_after) / 10 + "%";
+      add(b, "span", { class: "bar-value num " + (delta ? signClass(g.delta) : "") }, delta ? g.delta : g.after);
+      var meta = add(b, "span", { class: "bar-meta" },
+        plural(g.count, "resource", "resources") + " · " + g.changed + " changed · before " + g.before + " · delta " + g.delta);
+      if (g.unpriced) { text(meta, " · "); add(meta, "span", { class: "warn" }, g.unpriced + " unpriced"); }
+      b.addEventListener("click", function () { st[key] = on ? "" : g.key; st.open = ""; render(); });
+    });
+  }
+
+  // ---- (3) resource table
+  function summary(td, row) {
+    var r = row.r;
+    if (row.v.kind === "unpriced") {
+      add(td, "span", { class: "flag" }, "unpriced: " + row.reason);
+      if (r.blocking) { text(td, " · "); add(td, "span", { class: "block" }, "blocks the gate"); }
+      return;
+    }
+    if (row.v.kind === "no_charge") { add(td, "span", { class: "muted" }, "no charge"); return; }
+    text(td, shownSide(r).lines.map(function (l) { return l.name; }).join(" · "));
+    if (row.missing) { text(td, " · "); add(td, "span", { class: "flag" }, "premise missing"); }
+  }
+
+  function detail(tb, row) {
+    var td = add(add(tb, "tr", { class: "detail" }), "td", { colspan: "6" });
+    row.v.sides.forEach(function (s) {
+      var side = row.r[s.side];
+      add(td, "div", { class: "side-head" }, s.side + (side.unpriced ? " · unpriced" : " · US$ " + s.monthly + "/month"));
+      if (side.unpriced) { add(td, "div", { class: "flag small" }, side.unpriced); return; }
+      if (!side.lines.length) { add(td, "div", { class: "muted small" }, "no charge"); return; }
+      var t = add(td, "table", { class: "lines" }), h = add(t, "tr");
+      ["Line", "Formula", "Monthly", "Billing rule", "SKU", "Usage type", "Rate code", "Invoice description"]
+        .forEach(function (x) { add(h, "th", null, x); });
+      side.lines.forEach(function (l, j) {
+        var tr = add(t, "tr"), hv = s.lines[j];
+        add(tr, "td", null, l.name);
+        add(tr, "td", l.premise && !l.declared ? { class: "flag" } : null, hv.formula);
+        add(tr, "td", { class: "num" }, hv.monthly);
+        add(tr, "td", null, l.billing_rule);
+        add(tr, "td", { class: "mono" }, l.sku);
+        add(tr, "td", { class: "mono" }, l.usage_type);
+        add(tr, "td", { class: "mono" }, l.rate_code);
+        add(tr, "td", null, l.billing_description);
+      });
+    });
+  }
+
+  function table() {
+    var tb = $("rows"), shown = 0, lines = 0;
+    tb.textContent = "";
+    rows.forEach(function (row) {
+      if (!match(row)) return;
+      shown++;
+      lines += row.v.export.length;
+      var open = st.open === row.r.address;
+      var tr = add(tb, "tr", { class: "res" + (open ? " open" : "") }), td = add(tr, "td");
+      add(td, "span", { class: "addr" }, row.r.address);
+      add(td, "span", { class: "type" }, row.r.type);
+      add(add(tr, "td"), "span", { class: "act act-" + row.r.action }, row.r.action);
+      add(tr, "td", { class: "num" }, row.v.before);
+      add(tr, "td", { class: "num" }, row.v.after);
+      add(tr, "td", { class: "num " + signClass(row.v.delta) }, row.v.delta);
+      summary(add(tr, "td", { class: "small" }), row);
+      tr.addEventListener("click", function () { st.open = open ? "" : row.r.address; render(); });
+      if (open) detail(tb, row);
+    });
+    if (!shown) add(add(tb, "tr"), "td", { colspan: "6", class: "muted" }, "No resource matches the filters.");
+    $("count").textContent = shown + " of " + plural(rows.length, "resource", "resources") + " · " +
+      plural(lines, "cost line", "cost lines") + " to export";
+    $("exportCSV").disabled = $("exportJSONL").disabled = lines === 0;
+    body.setAttribute("data-rows", String(shown));
+    body.setAttribute("data-lines", String(lines));
+  }
+
+  // ---- (4) unpriced, grouped by reason
+  function unpricedCard() {
+    var box = $("unpriced"), n = 0, blocking = 0;
+    V.unpriced.forEach(function (g) { n += g.resources.length; blocking += g.blocking; });
+    cardHead(box, "Unpriced resources", n ? plural(n, "resource", "resources") + " · " + blocking + " blocking" : "none");
+    if (!n) { add(box, "p", { class: "muted" }, "Every resource has a price or no charge of its own."); return; }
+    add(box, "p", { class: "muted small" }, "Fail-closed: an unpriced resource counts as 0 in the totals, and a created, " +
+      "updated or replaced one blocks the gate (exit 2).");
+    V.unpriced.forEach(function (g) {
+      var d = add(box, "div", { class: "group" }), gh = add(d, "div", { class: "group-head" });
+      add(gh, "h3", null, g.title);
+      add(gh, "span", { class: "muted small" }, g.resources.length + (g.blocking ? " · " + g.blocking + " blocking" : ""));
+      add(d, "p", { class: "muted small" }, g.hint);
+      var ul = add(d, "ul", { class: "list" });
+      g.resources.slice(0, LIMIT).forEach(function (i) {
+        var row = rows[i], li = add(ul, "li");
+        resourceLink(li, row);
+        var m = add(li, "div", { class: "small" });
+        add(m, "span", { class: "act act-" + row.r.action }, row.r.action);
+        text(m, " " + row.reason + " · ");
+        add(m, "span", { class: row.r.blocking ? "block" : "muted" },
+          row.r.blocking ? "blocks the gate" : "does not block (unchanged or deleted)");
+      });
+      showAll(d, (g.resources.length > LIMIT ? "show all " + g.resources.length : "show") + " in the table",
+        function (s) { s.why = g.category; });
+    });
+  }
+
+  // ---- (5) usage premises, declared and missing
+  function premisesCard() {
+    var box = $("premises"), miss = [], decl = [];
+    V.premises.forEach(function (p) {
+      var x = { row: rows[p.resource], p: p, l: R.resources[p.resource][p.side].lines[p.line], v: viewSide(p.resource, p.side).lines[p.line] };
+      (x.l.declared ? decl : miss).push(x);
+    });
+    cardHead(box, "Usage premises", V.premises.length ? miss.length + " missing · " + decl.length + " declared" : "none");
+    if (!V.premises.length) { add(box, "p", { class: "muted" }, "No cost line depends on a usage premise."); return; }
+    if (miss.length) {
+      var d = add(box, "div", { class: "group" });
+      add(d, "h3", null, "Not declared: counted as 0");
+      add(d, "p", { class: "muted small" }, "The totals leave these lines out. Declare the premise in the usage file (--usage).");
+      var ul = add(d, "ul", { class: "list" });
+      miss.slice(0, LIMIT).forEach(function (x) {
+        var li = add(ul, "li");
+        resourceLink(li, x.row);
+        var m = add(li, "div", { class: "small" });
+        text(m, x.l.name + " · set ");
+        add(m, "code", null, x.l.premise);
+        add(li, "div", { class: "small flag" }, "effect: " + x.p.per_unit + " declared");
+      });
+      showAll(d, (miss.length > LIMIT ? "show all " + miss.length : "show") + " in the table",
+        function (s) { s.show = "premise"; });
+    }
+    if (decl.length) {
+      var d2 = add(box, "div", { class: "group" });
+      add(d2, "h3", null, "Declared");
+      var ul2 = add(d2, "ul", { class: "list" });
+      if (decl.length > LIMIT) add(d2, "p", { class: "muted small" }, "and " + (decl.length - LIMIT) + " more; open a resource to see its lines");
+      decl.slice(0, LIMIT).forEach(function (x) {
+        var li = add(ul2, "li");
+        resourceLink(li, x.row);
+        var m = add(li, "div", { class: "small" });
+        text(m, x.l.name + " · ");
+        add(m, "code", null, x.l.premise);
+        add(li, "div", { class: "small muted" }, x.v.formula + " → US$ " + x.v.monthly + "/month in the total");
+      });
+    }
+  }
+
+  // ---- (0) warnings: part of the estimate is probably not what the caller wants
+  function warning(parent, w) {
+    var d = add(parent, "div", { class: "warning" });
+    add(d, "code", { class: "warn-code" }, w.code);
+    text(d, " ");
+    add(d, "span", null, w.message);
+    var f = add(d, "div", { class: "small" });
+    text(f, "fix: ");
+    add(f, "code", null, w.fix);
+  }
+  function warningsCard() {
+    var list = R.warnings || [];
+    body.setAttribute("data-warnings", String(list.length));
+    if (!list.length) return;
+    var box = $("warnings");
+    box.hidden = false;
+    cardHead(box, plural(list.length, "warning", "warnings"), "also at the top of the Markdown report");
+    list.forEach(function (w) { warning(box, w); });
+  }
+
+  // ---- (6) pricing region
+  function regionCard() {
+    var box = $("region");
+    var ws = (R.warnings || []).filter(function (w) { return w.code === "region_mismatch"; });
+    cardHead(box, "Pricing region", ws.length ? plural(ws.length, "warning", "warnings") : "");
+    var dl = add(box, "dl", { class: "kv" });
+    kv(dl, "priced region (--region)", V.region.priced, "mono");
+    kv(dl, "snapshot region", V.region.snapshot, "mono");
+    add(box, "p", { class: "muted small" }, "costgate takes the region of a resource from the plan: its region attribute, " +
+      "the region of its provider configuration, or its ARN. A resource in another region stays unpriced; a resource " +
+      "with no known region is priced with the rates and bill codes of this region.");
+    ws.forEach(function (w) { warning(box, w); });
+    if (!V.region.mismatch.length) {
+      add(box, "p", { class: "muted" }, "No resource in the plan is in a region different from the priced one.");
+      return;
+    }
+    var ul = add(box, "ul", { class: "list" });
+    V.region.mismatch.slice(0, LIMIT).forEach(function (i) {
+      var li = add(ul, "li");
+      resourceLink(li, rows[i]);
+      add(li, "div", { class: "small flag" }, rows[i].reason);
+    });
+    var n = V.region.mismatch.length;
+    showAll(box, (n > LIMIT ? "show all " + n : "show") + " in the table", function (s) { s.why = "region"; });
+  }
+
+  // ---- (6b) resources of the providers left out with --ignore-provider
+  function ignoredCard() {
+    var list = R.ignored || [], providers = R.ignored_providers || [];
+    body.setAttribute("data-ignored", String(list.length));
+    if (!providers.length) return;
+    var box = $("ignored");
+    box.hidden = false;
+    cardHead(box, "Ignored providers", plural(list.length, "resource", "resources"));
+    var p = add(box, "p", { class: "muted small" });
+    text(p, "Left out of the estimate, of the totals and of the gate, and not in the resource table: ");
+    providers.forEach(function (x, i) {
+      if (i) text(p, ", ");
+      add(p, "code", null, x);
+    });
+    text(p, " (--ignore-provider).");
+    if (!list.length) { add(box, "p", { class: "muted" }, "No resource of the plan matched these providers."); return; }
+    var ul = add(box, "ul", { class: "list" });
+    list.slice(0, LIMIT).forEach(function (x) {
+      var li = add(ul, "li");
+      add(li, "span", { class: "mono small" }, x.address);
+      var m = add(li, "div", { class: "small" });
+      add(m, "span", { class: "act act-" + x.action }, x.action);
+      text(m, " " + x.type + " · ");
+      add(m, "span", { class: "muted" }, x.provider);
+    });
+    if (list.length > LIMIT) add(box, "p", { class: "muted small" }, "and " + (list.length - LIMIT) + " more in the JSON report (ignored)");
+  }
+
+  function sourcesCard() {
+    var box = $("sources");
+    cardHead(box, "Price snapshot", plural(R.pricing.sources.length, "offer file", "offer files"));
+    var dl = add(box, "dl", { class: "kv" });
+    kv(dl, "region", V.region.snapshot, "mono");
+    kv(dl, "as of", R.pricing.as_of, "mono");
+    kv(dl, "sha256", R.pricing.sha256, "mono");
+    kv(dl, "costgate", R.version, "mono");
+    var t = add(box, "table", { class: "lines sources" }), h = add(t, "tr");
+    ["Offer file", "Scope", "Published"].forEach(function (x) { add(h, "th", null, x); });
+    R.pricing.sources.forEach(function (s) {
+      var tr = add(t, "tr", { title: s.path });
+      add(tr, "td", { class: "mono" }, s.service + " " + s.version);
+      add(tr, "td", null, s.scope);
+      add(tr, "td", { class: "mono" }, s.publication_date);
+    });
+  }
+
+  // ---- (7) export of the filtered cost lines
+  function csvCell(s) {
+    s = String(s);
+    // A spreadsheet runs a cell that starts with = + - @ as a formula; numbers stay as they are.
+    if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s)) s = "'" + s;
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function exportCSV() {
+    var out = [V.csv_header.map(csvCell).join(",")];
+    filtered().forEach(function (row) {
+      row.v.export.forEach(function (x) { out.push(x.csv.map(csvCell).join(",")); });
+    });
+    return out.join("\r\n") + "\r\n";
+  }
+  function exportJSONL() {
+    var out = [];
+    filtered().forEach(function (row) {
+      row.v.export.forEach(function (x) { out.push(x.jsonl + "\n"); });
+    });
+    return out.join("");
+  }
+  function download(name, type, content) {
+    var url = URL.createObjectURL(new Blob([content], { type: type }));
+    var a = add(body, "a", { href: url, download: name });
+    a.click();
+    body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  // ---- controls
+  function seg(box, items, key) {
+    items.forEach(function (x) {
+      var b = add(box, "button", { type: "button", "data-v": x[0] }, x[1]);
+      b.addEventListener("click", function () { st[key] = x[0]; render(); });
+    });
+  }
+  function controls() {
+    var q = $("q");
+    q.addEventListener("input", function () { st.q = q.value; st.open = ""; render(); });
+    $("action").addEventListener("change", function (e) { st.action = e.target.value; st.open = ""; render(); });
+    seg($("metric"), METRICS, "metric");
+    seg($("show"), SHOWS, "show");
+    $("exportCSV").addEventListener("click", function () { download("costgate-lines.csv", "text/csv;charset=utf-8", exportCSV()); });
+    $("exportJSONL").addEventListener("click", function () { download("costgate-lines.jsonl", "application/jsonl", exportJSONL()); });
+    window.addEventListener("hashchange", function () {
+      var s = readHash();
+      if (hashOf(s) === hashOf(st)) return;
+      st = s;
+      render();
+    });
+  }
+  function syncControls() {
+    if ($("q").value !== st.q) $("q").value = st.q;
+    var sel = $("action"), counts = {}, all = 0;
+    rows.forEach(function (row) {
+      if (!match(row, "action")) return;
+      all++;
+      counts[row.r.action] = (counts[row.r.action] || 0) + 1;
+    });
+    sel.textContent = "";
+    add(sel, "option", { value: "" }, "all actions (" + all + ")");
+    ACTIONS.forEach(function (a) {
+      if (counts[a] || st.action === a) add(sel, "option", { value: a }, a + " (" + (counts[a] || 0) + ")");
+    });
+    sel.value = st.action;
+    var shows = $("show").children;
+    for (var i = 0; i < shows.length; i++) {
+      var v = shows[i].getAttribute("data-v");
+      var n = rows.filter(function (row) { return match(row, "show") && (v === "all" ||
+        (v === "changed" && row.r.action !== "no-op") || (v === "blocking" && row.r.blocking) ||
+        (v === "unpriced" && row.v.kind === "unpriced") || (v === "premise" && row.missing)); }).length;
+      shows[i].textContent = SHOWS[i][1] + " (" + n + ")";
+      shows[i].className = st.show === v ? "on" : "";
+    }
+    var metrics = $("metric").children;
+    for (var j = 0; j < metrics.length; j++) metrics[j].className = st.metric === metrics[j].getAttribute("data-v") ? "on" : "";
+    var pills = $("pills");
+    pills.textContent = "";
+    var reason = V.unpriced.filter(function (g) { return g.category === st.why; })[0];
+    [["module", st.module], ["type", st.type], ["why", reason ? reason.title : ""]].forEach(function (p) {
+      if (!p[1]) return;
+      var s = add(pills, "span", { class: "pill" });
+      text(s, (p[0] === "why" ? "unpriced" : p[0]) + ": ");
+      add(s, p[0] === "why" ? "span" : "code", null, p[1]);
+      var x = add(s, "button", { type: "button", title: "remove this filter" }, "×");
+      x.addEventListener("click", function () { st[p[0]] = ""; render(); });
+    });
+  }
+
+  function render() {
+    syncControls();
+    bars($("byModule"), V.modules, "module");
+    bars($("byType"), V.types, "type");
+    table();
+    writeHash();
+  }
+
+  function start(data) {
+    R = data.report;
+    V = data.view;
+    rows = buildRows();
+    st = readHash();
+    body.setAttribute("data-gate", R.status);
+    body.setAttribute("data-exit", String(R.exit_code));
+    body.setAttribute("data-total", String(rows.length));
+    header();
+    warningsCard();
+    checksCard();
+    unpricedCard();
+    premisesCard();
+    regionCard();
+    ignoredCard();
+    sourcesCard();
+    var ign = R.ignored_providers && R.ignored_providers.length ? " · --ignore-provider " + R.ignored_providers.join(",") +
+      ": " + plural((R.ignored || []).length, "resource", "resources") + " left out of the gate" : "";
+    $("foot").textContent = "costgate " + R.version + " · AWS Price List Bulk API snapshot " + V.region.snapshot +
+      " as of " + R.pricing.as_of + " (sha256 " + V.sha256_short + ")" + ign + " · " + V.footer +
+      " This page makes no network request.";
+    controls();
+    render();
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    try {
+      start(JSON.parse($("costgate-data").textContent));
+    } catch (err) {
+      fail(String((err && err.message) || err));
+      return;
+    }
+    if (body.getAttribute("data-status") === "loading") body.setAttribute("data-status", "ok");
+  });
+})();
+</script>
+<script type="application/json" id="costgate-data">{"report":{"schema_version":1,"tool":"costgate","version":"test","region":"us-east-1","currency":"USD","pricing":{"as_of":"2026-11-11T15:35:57Z","sha256":"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","sources":[{"service":"AWSCertificateManager","scope":"region","version":"20261022154217","publication_date":"2026-10-22T15:42:17Z","path":"/offers/v1.0/aws/AWSCertificateManager/20261022154217/us-east-1/index.csv"},{"service":"AWSCloudTrail","scope":"region","version":"20261102172009","publication_date":"2026-11-02T17:20:09Z","path":"/offers/v1.0/aws/AWSCloudTrail/20261102172009/us-east-1/index.csv"},{"service":"AmazonEC2","scope":"region","version":"20261029175634","publication_date":"2026-10-29T17:56:34Z","path":"/offers/v1.0/aws/AmazonEC2/20261029175634/us-east-1/index.csv"},{"service":"AmazonEKS","scope":"region","version":"20261111153557","publication_date":"2026-11-11T15:35:57Z","path":"/offers/v1.0/aws/AmazonEKS/20261111153557/us-east-1/index.csv"},{"service":"AmazonRoute53","scope":"global","version":"20260911124504","publication_date":"2026-09-11T12:45:04Z","path":"/offers/v1.0/aws/AmazonRoute53/current/index.csv"},{"service":"AmazonRoute53","scope":"region","version":"20260911124504","publication_date":"2026-09-11T12:45:04Z","path":"/offers/v1.0/aws/AmazonRoute53/20260911124504/us-east-1/index.csv"},{"service":"AmazonS3","scope":"region","version":"20261015173540","publication_date":"2026-10-15T17:35:40Z","path":"/offers/v1.0/aws/AmazonS3/20261015173540/us-east-1/index.csv"},{"service":"AmazonVPC","scope":"region","version":"20261103000947","publication_date":"2026-11-03T00:09:47Z","path":"/offers/v1.0/aws/AmazonVPC/20261103000947/us-east-1/index.csv"},{"service":"awskms","scope":"region","version":"20261026201814","publication_date":"2026-10-26T20:18:14Z","path":"/offers/v1.0/aws/awskms/20261026201814/us-east-1/index.csv"}]},"totals":{"monthly_before":73.5160,"monthly_after":21.8176,"monthly_delta":-51.6984},"ceilings":{"max_monthly_delta":50.0000,"max_monthly_total":null},"status":"ok","exit_code":0,"reasons":[],"incomplete":false,"resources":[{"address":"aws_ebs_volume.data","type":"aws_ebs_volume","action":"update","zero_cost":false,"before":{"monthly":1.6000,"lines":[{"name":"EBS volume (gp3)","price_key":"AmazonEC2|EBS:VolumeUsage.gp3|","sku":"JG3KUJMBRGHV3N8G","usage_type":"EBS:VolumeUsage.gp3","rate_code":"JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)","billing_rule":"fixed_monthly","unit_price":0.08,"quantity":20,"unit":"GB-month","monthly":1.6000,"declared":true}]},"after":{"monthly":4.0000,"lines":[{"name":"EBS volume (gp3)","price_key":"AmazonEC2|EBS:VolumeUsage.gp3|","sku":"JG3KUJMBRGHV3N8G","usage_type":"EBS:VolumeUsage.gp3","rate_code":"JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)","billing_rule":"fixed_monthly","unit_price":0.08,"quantity":50,"unit":"GB-month","monthly":4.0000,"declared":true}]},"delta":2.4000,"blocking":false},{"address":"aws_eip.nat","type":"aws_eip","action":"delete","zero_cost":false,"before":{"monthly":3.6500,"lines":[{"name":"public IPv4 address","price_key":"AmazonVPC|PublicIPv4:InUseAddress|","sku":"4GQUNXTFWVSGPUZK","usage_type":"USE1-PublicIPv4:InUseAddress","rate_code":"4GQUNXTFWVSGPUZK.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.005 per In-use public IPv4 address per hour","billing_rule":"fixed_hourly","unit_price":0.005,"quantity":730,"unit":"h","monthly":3.6500,"declared":true}]},"after":null,"delta":-3.6500,"blocking":false},{"address":"aws_instance.app","type":"aws_instance","action":"replace","zero_cost":false,"before":{"monthly":8.2320,"lines":[{"name":"compute on-demand, Linux t3.micro","price_key":"AmazonEC2|BoxUsage:t3.micro|RunInstances","sku":"CRAJUW7BTXFMT2UJ","usage_type":"BoxUsage:t3.micro","rate_code":"CRAJUW7BTXFMT2UJ.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.0104 per On Demand Linux t3.micro Instance Hour","billing_rule":"fixed_hourly","unit_price":0.0104,"quantity":730,"unit":"h","monthly":7.5920,"declared":true},{"name":"root volume (gp3)","price_key":"AmazonEC2|EBS:VolumeUsage.gp3|","sku":"JG3KUJMBRGHV3N8G","usage_type":"EBS:VolumeUsage.gp3","rate_code":"JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)","billing_rule":"fixed_monthly","unit_price":0.08,"quantity":8,"unit":"GB-month","monthly":0.6400,"declared":true}]},"after":{"monthly":6.1856,"lines":[{"name":"compute Spot, Linux t4g.small","price_key":"AmazonEC2|BoxUsage:t4g.small|RunInstances","sku":"9GWX7R3VJUG9P8Y8","usage_type":"BoxUsage:t4g.small","rate_code":"9GWX7R3VJUG9P8Y8.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.0168 per On Demand Linux t4g.small Instance Hour","billing_rule":"usage","unit_price":0.0168,"quantity":730,"unit":"h","factor":0.4,"monthly":4.9056,"premise":"spot_discount","declared":true,"note":"on-demand × (1 − spot_discount 0.6)"},{"name":"root volume (gp3)","price_key":"AmazonEC2|EBS:VolumeUsage.gp3|","sku":"JG3KUJMBRGHV3N8G","usage_type":"EBS:VolumeUsage.gp3","rate_code":"JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)","billing_rule":"fixed_monthly","unit_price":0.08,"quantity":16,"unit":"GB-month","monthly":1.2800,"declared":true}]},"delta":-2.0464,"blocking":false},{"address":"aws_instance.batch","type":"aws_instance","action":"update","zero_cost":false,"before":{"monthly":25.6840,"lines":[{"name":"compute on-demand, Linux m7g.large","price_key":"AmazonEC2|BoxUsage:m7g.large|RunInstances","sku":"Y4JWUCG93UEP6MPT","usage_type":"BoxUsage:m7g.large","rate_code":"Y4JWUCG93UEP6MPT.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.0816 per On Demand Linux m7g.large Instance Hour","billing_rule":"fixed_hourly","unit_price":0.0816,"quantity":240,"unit":"h","monthly":19.5840,"declared":true},{"name":"root volume (gp3)","price_key":"AmazonEC2|EBS:VolumeUsage.gp3|","sku":"JG3KUJMBRGHV3N8G","usage_type":"EBS:VolumeUsage.gp3","rate_code":"JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)","billing_rule":"fixed_monthly","unit_price":0.08,"quantity":20,"unit":"GB-month","monthly":1.6000,"declared":true},{"name":"ebs_block_device[0] (st1)","price_key":"AmazonEC2|EBS:VolumeUsage.st1|","sku":"YQT3C842QHBG6XCU","usage_type":"EBS:VolumeUsage.st1","rate_code":"YQT3C842QHBG6XCU.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.045 per GB-month of Throughput Optimized HDD (st1) provisioned storage - US East (Northern Virginia)","billing_rule":"fixed_monthly","unit_price":0.045,"quantity":100,"unit":"GB-month","monthly":4.5000,"declared":true}]},"after":{"monthly":10.1320,"lines":[{"name":"compute on-demand, Linux t4g.small","price_key":"AmazonEC2|BoxUsage:t4g.small|RunInstances","sku":"9GWX7R3VJUG9P8Y8","usage_type":"BoxUsage:t4g.small","rate_code":"9GWX7R3VJUG9P8Y8.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.0168 per On Demand Linux t4g.small Instance Hour","billing_rule":"fixed_hourly","unit_price":0.0168,"quantity":240,"unit":"h","monthly":4.0320,"declared":true},{"name":"root volume (gp3)","price_key":"AmazonEC2|EBS:VolumeUsage.gp3|","sku":"JG3KUJMBRGHV3N8G","usage_type":"EBS:VolumeUsage.gp3","rate_code":"JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)","billing_rule":"fixed_monthly","unit_price":0.08,"quantity":20,"unit":"GB-month","monthly":1.6000,"declared":true},{"name":"ebs_block_device[0] (st1)","price_key":"AmazonEC2|EBS:VolumeUsage.st1|","sku":"YQT3C842QHBG6XCU","usage_type":"EBS:VolumeUsage.st1","rate_code":"YQT3C842QHBG6XCU.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.045 per GB-month of Throughput Optimized HDD (st1) provisioned storage - US East (Northern Virginia)","billing_rule":"fixed_monthly","unit_price":0.045,"quantity":100,"unit":"GB-month","monthly":4.5000,"declared":true}]},"delta":-15.5520,"blocking":false},{"address":"aws_kms_key.state","type":"aws_kms_key","action":"no-op","zero_cost":false,"before":{"monthly":1.0000,"lines":[{"name":"customer managed key","price_key":"awskms|KMS-Keys|","sku":"U553K98XGDXCYHWS","usage_type":"us-east-1-KMS-Keys","rate_code":"U553K98XGDXCYHWS.JRTCKXETXF.6YS6EN2CT7","billing_description":"$1 per customer managed KMS key version in US East (N. Virginia)","billing_rule":"fixed_monthly","unit_price":1,"quantity":1,"unit":"key-month","monthly":1.0000,"declared":true,"note":"requests not priced"}]},"after":{"monthly":1.0000,"lines":[{"name":"customer managed key","price_key":"awskms|KMS-Keys|","sku":"U553K98XGDXCYHWS","usage_type":"us-east-1-KMS-Keys","rate_code":"U553K98XGDXCYHWS.JRTCKXETXF.6YS6EN2CT7","billing_description":"$1 per customer managed KMS key version in US East (N. Virginia)","billing_rule":"fixed_monthly","unit_price":1,"quantity":1,"unit":"key-month","monthly":1.0000,"declared":true,"note":"requests not priced"}]},"delta":0.0000,"blocking":false},{"address":"aws_nat_gateway.main","type":"aws_nat_gateway","action":"delete","zero_cost":false,"before":{"monthly":32.8500,"lines":[{"name":"NAT gateway hours","price_key":"AmazonEC2|NatGateway-Hours|NatGateway","sku":"M2YSHUBETB3JX4M4","usage_type":"NatGateway-Hours","rate_code":"M2YSHUBETB3JX4M4.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.045 per NAT Gateway Hour","billing_rule":"fixed_hourly","unit_price":0.045,"quantity":730,"unit":"h","monthly":32.8500,"declared":true},{"name":"NAT data processed","price_key":"AmazonEC2|NatGateway-Bytes|NatGateway","sku":"59S5R83GFPUAGVR5","usage_type":"NatGateway-Bytes","rate_code":"59S5R83GFPUAGVR5.JRTCKXETXF.6YS6EN2CT7","billing_description":"$0.045 per GB Data Processed by NAT Gateways","billing_rule":"usage","unit_price":0.045,"quantity":0,"unit":"GB","monthly":0.0000,"premise":"gb_per_month","declared":false}]},"after":null,"delta":-32.8500,"blocking":false},{"address":"aws_route_table.private","type":"aws_route_table","action":"update","zero_cost":true,"before":{"monthly":0.0000,"lines":[]},"after":{"monthly":0.0000,"lines":[]},"delta":0.0000,"blocking":false},{"address":"module.dns.aws_route53_zone.this[\"example.com\"]","type":"aws_route53_zone","action":"no-op","zero_cost":false,"before":{"monthly":0.5000,"lines":[{"name":"hosted zone","price_key":"AmazonRoute53|HostedZone|","sku":"KVPGEJE88UW8S779","usage_type":"HostedZone","rate_code":"KVPGEJE88UW8S779.JRTCKXETXF.G2A93NZ7DT","billing_description":"$0.50 per Hosted Zone for the first 25 Hosted Zones","billing_rule":"fixed_monthly","unit_price":0.5,"quantity":1,"unit":"zone-month","monthly":0.5000,"declared":true,"note":"first-25-zones tier"}]},"after":{"monthly":0.5000,"lines":[{"name":"hosted zone","price_key":"AmazonRoute53|HostedZone|","sku":"KVPGEJE88UW8S779","usage_type":"HostedZone","rate_code":"KVPGEJE88UW8S779.JRTCKXETXF.G2A93NZ7DT","billing_description":"$0.50 per Hosted Zone for the first 25 Hosted Zones","billing_rule":"fixed_monthly","unit_price":0.5,"quantity":1,"unit":"zone-month","monthly":0.5000,"declared":true,"note":"first-25-zones tier"}]},"delta":0.0000,"blocking":false}],"usage_not_declared":[{"address":"aws_nat_gateway.main","line":"NAT data processed","premise":"gb_per_month"}]},"view":{"totals":{"before":"73.52","after":"21.82","delta":"-51.70"},"checks":[{"name":"--max-monthly-delta","flag":true,"limit":"50.00","value":"-51.70","ok":true},{"name":"Unpriced resources created or changed","flag":false,"limit":"0","value":"0","ok":true}],"resources":[{"module":"(root)","before":"1.60","after":"4.00","delta":"+2.40","kind":"priced","sides":[{"side":"before","monthly":"1.60","lines":[{"formula":"20 GB-month × $0.08 = 1.60","monthly":"1.60"}]},{"side":"after","monthly":"4.00","lines":[{"formula":"50 GB-month × $0.08 = 4.00","monthly":"4.00"}]}],"export":[{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_ebs_volume.data\",\"type\":\"aws_ebs_volume\",\"action\":\"update\",\"side\":\"before\",\"name\":\"EBS volume (gp3)\",\"price_key\":\"AmazonEC2|EBS:VolumeUsage.gp3|\",\"sku\":\"JG3KUJMBRGHV3N8G\",\"usage_type\":\"EBS:VolumeUsage.gp3\",\"rate_code\":\"JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)\",\"billing_rule\":\"fixed_monthly\",\"unit_price\":0.08,\"quantity\":20,\"unit\":\"GB-month\",\"monthly\":1.6000,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_ebs_volume.data","aws_ebs_volume","update","before","EBS volume (gp3)","AmazonEC2|EBS:VolumeUsage.gp3|","JG3KUJMBRGHV3N8G","EBS:VolumeUsage.gp3","JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7","$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)","fixed_monthly","0.08","20","GB-month","","1.6000","","true",""]},{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_ebs_volume.data\",\"type\":\"aws_ebs_volume\",\"action\":\"update\",\"side\":\"after\",\"name\":\"EBS volume (gp3)\",\"price_key\":\"AmazonEC2|EBS:VolumeUsage.gp3|\",\"sku\":\"JG3KUJMBRGHV3N8G\",\"usage_type\":\"EBS:VolumeUsage.gp3\",\"rate_code\":\"JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)\",\"billing_rule\":\"fixed_monthly\",\"unit_price\":0.08,\"quantity\":50,\"unit\":\"GB-month\",\"monthly\":4.0000,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_ebs_volume.data","aws_ebs_volume","update","after","EBS volume (gp3)","AmazonEC2|EBS:VolumeUsage.gp3|","JG3KUJMBRGHV3N8G","EBS:VolumeUsage.gp3","JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7","$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)","fixed_monthly","0.08","50","GB-month","","4.0000","","true",""]}]},{"module":"(root)","before":"3.65","after":"–","delta":"-3.65","kind":"priced","sides":[{"side":"before","monthly":"3.65","lines":[{"formula":"730 h × $0.005 = 3.65","monthly":"3.65"}]}],"export":[{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_eip.nat\",\"type\":\"aws_eip\",\"action\":\"delete\",\"side\":\"before\",\"name\":\"public IPv4 address\",\"price_key\":\"AmazonVPC|PublicIPv4:InUseAddress|\",\"sku\":\"4GQUNXTFWVSGPUZK\",\"usage_type\":\"USE1-PublicIPv4:InUseAddress\",\"rate_code\":\"4GQUNXTFWVSGPUZK.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.005 per In-use public IPv4 address per hour\",\"billing_rule\":\"fixed_hourly\",\"unit_price\":0.005,\"quantity\":730,\"unit\":\"h\",\"monthly\":3.6500,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_eip.nat","aws_eip","delete","before","public IPv4 address","AmazonVPC|PublicIPv4:InUseAddress|","4GQUNXTFWVSGPUZK","USE1-PublicIPv4:InUseAddress","4GQUNXTFWVSGPUZK.JRTCKXETXF.6YS6EN2CT7","$0.005 per In-use public IPv4 address per hour","fixed_hourly","0.005","730","h","","3.6500","","true",""]}]},{"module":"(root)","before":"8.23","after":"6.19","delta":"-2.05","kind":"priced","sides":[{"side":"before","monthly":"8.23","lines":[{"formula":"730 h × $0.0104 = 7.59","monthly":"7.59"},{"formula":"8 GB-month × $0.08 = 0.64","monthly":"0.64"}]},{"side":"after","monthly":"6.19","lines":[{"formula":"730 h × $0.0168 × 0.4 = 4.91 (on-demand × (1 − spot_discount 0.6))","monthly":"4.91"},{"formula":"16 GB-month × $0.08 = 1.28","monthly":"1.28"}]}],"export":[{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_instance.app\",\"type\":\"aws_instance\",\"action\":\"replace\",\"side\":\"before\",\"name\":\"compute on-demand, Linux t3.micro\",\"price_key\":\"AmazonEC2|BoxUsage:t3.micro|RunInstances\",\"sku\":\"CRAJUW7BTXFMT2UJ\",\"usage_type\":\"BoxUsage:t3.micro\",\"rate_code\":\"CRAJUW7BTXFMT2UJ.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.0104 per On Demand Linux t3.micro Instance Hour\",\"billing_rule\":\"fixed_hourly\",\"unit_price\":0.0104,\"quantity\":730,\"unit\":\"h\",\"monthly\":7.5920,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_instance.app","aws_instance","replace","before","compute on-demand, Linux t3.micro","AmazonEC2|BoxUsage:t3.micro|RunInstances","CRAJUW7BTXFMT2UJ","BoxUsage:t3.micro","CRAJUW7BTXFMT2UJ.JRTCKXETXF.6YS6EN2CT7","$0.0104 per On Demand Linux t3.micro Instance Hour","fixed_hourly","0.0104","730","h","","7.5920","","true",""]},{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_instance.app\",\"type\":\"aws_instance\",\"action\":\"replace\",\"side\":\"before\",\"name\":\"root volume (gp3)\",\"price_key\":\"AmazonEC2|EBS:VolumeUsage.gp3|\",\"sku\":\"JG3KUJMBRGHV3N8G\",\"usage_type\":\"EBS:VolumeUsage.gp3\",\"rate_code\":\"JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)\",\"billing_rule\":\"fixed_monthly\",\"unit_price\":0.08,\"quantity\":8,\"unit\":\"GB-month\",\"monthly\":0.6400,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_instance.app","aws_instance","replace","before","root volume (gp3)","AmazonEC2|EBS:VolumeUsage.gp3|","JG3KUJMBRGHV3N8G","EBS:VolumeUsage.gp3","JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7","$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)","fixed_monthly","0.08","8","GB-month","","0.6400","","true",""]},{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_instance.app\",\"type\":\"aws_instance\",\"action\":\"replace\",\"side\":\"after\",\"name\":\"compute Spot, Linux t4g.small\",\"price_key\":\"AmazonEC2|BoxUsage:t4g.small|RunInstances\",\"sku\":\"9GWX7R3VJUG9P8Y8\",\"usage_type\":\"BoxUsage:t4g.small\",\"rate_code\":\"9GWX7R3VJUG9P8Y8.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.0168 per On Demand Linux t4g.small Instance Hour\",\"billing_rule\":\"usage\",\"unit_price\":0.0168,\"quantity\":730,\"unit\":\"h\",\"factor\":0.4,\"monthly\":4.9056,\"premise\":\"spot_discount\",\"declared\":true,\"note\":\"on-demand × (1 − spot_discount 0.6)\"}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_instance.app","aws_instance","replace","after","compute Spot, Linux t4g.small","AmazonEC2|BoxUsage:t4g.small|RunInstances","9GWX7R3VJUG9P8Y8","BoxUsage:t4g.small","9GWX7R3VJUG9P8Y8.JRTCKXETXF.6YS6EN2CT7","$0.0168 per On Demand Linux t4g.small Instance Hour","usage","0.0168","730","h","0.4","4.9056","spot_discount","true","on-demand × (1 − spot_discount 0.6)"]},{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_instance.app\",\"type\":\"aws_instance\",\"action\":\"replace\",\"side\":\"after\",\"name\":\"root volume (gp3)\",\"price_key\":\"AmazonEC2|EBS:VolumeUsage.gp3|\",\"sku\":\"JG3KUJMBRGHV3N8G\",\"usage_type\":\"EBS:VolumeUsage.gp3\",\"rate_code\":\"JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)\",\"billing_rule\":\"fixed_monthly\",\"unit_price\":0.08,\"quantity\":16,\"unit\":\"GB-month\",\"monthly\":1.2800,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_instance.app","aws_instance","replace","after","root volume (gp3)","AmazonEC2|EBS:VolumeUsage.gp3|","JG3KUJMBRGHV3N8G","EBS:VolumeUsage.gp3","JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7","$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)","fixed_monthly","0.08","16","GB-month","","1.2800","","true",""]}]},{"module":"(root)","before":"25.68","after":"10.13","delta":"-15.55","kind":"priced","sides":[{"side":"before","monthly":"25.68","lines":[{"formula":"240 h × $0.0816 = 19.58","monthly":"19.58"},{"formula":"20 GB-month × $0.08 = 1.60","monthly":"1.60"},{"formula":"100 GB-month × $0.045 = 4.50","monthly":"4.50"}]},{"side":"after","monthly":"10.13","lines":[{"formula":"240 h × $0.0168 = 4.03","monthly":"4.03"},{"formula":"20 GB-month × $0.08 = 1.60","monthly":"1.60"},{"formula":"100 GB-month × $0.045 = 4.50","monthly":"4.50"}]}],"export":[{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_instance.batch\",\"type\":\"aws_instance\",\"action\":\"update\",\"side\":\"before\",\"name\":\"compute on-demand, Linux m7g.large\",\"price_key\":\"AmazonEC2|BoxUsage:m7g.large|RunInstances\",\"sku\":\"Y4JWUCG93UEP6MPT\",\"usage_type\":\"BoxUsage:m7g.large\",\"rate_code\":\"Y4JWUCG93UEP6MPT.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.0816 per On Demand Linux m7g.large Instance Hour\",\"billing_rule\":\"fixed_hourly\",\"unit_price\":0.0816,\"quantity\":240,\"unit\":\"h\",\"monthly\":19.5840,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_instance.batch","aws_instance","update","before","compute on-demand, Linux m7g.large","AmazonEC2|BoxUsage:m7g.large|RunInstances","Y4JWUCG93UEP6MPT","BoxUsage:m7g.large","Y4JWUCG93UEP6MPT.JRTCKXETXF.6YS6EN2CT7","$0.0816 per On Demand Linux m7g.large Instance Hour","fixed_hourly","0.0816","240","h","","19.5840","","true",""]},{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_instance.batch\",\"type\":\"aws_instance\",\"action\":\"update\",\"side\":\"before\",\"name\":\"root volume (gp3)\",\"price_key\":\"AmazonEC2|EBS:VolumeUsage.gp3|\",\"sku\":\"JG3KUJMBRGHV3N8G\",\"usage_type\":\"EBS:VolumeUsage.gp3\",\"rate_code\":\"JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)\",\"billing_rule\":\"fixed_monthly\",\"unit_price\":0.08,\"quantity\":20,\"unit\":\"GB-month\",\"monthly\":1.6000,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_instance.batch","aws_instance","update","before","root volume (gp3)","AmazonEC2|EBS:VolumeUsage.gp3|","JG3KUJMBRGHV3N8G","EBS:VolumeUsage.gp3","JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7","$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)","fixed_monthly","0.08","20","GB-month","","1.6000","","true",""]},{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_instance.batch\",\"type\":\"aws_instance\",\"action\":\"update\",\"side\":\"before\",\"name\":\"ebs_block_device[0] (st1)\",\"price_key\":\"AmazonEC2|EBS:VolumeUsage.st1|\",\"sku\":\"YQT3C842QHBG6XCU\",\"usage_type\":\"EBS:VolumeUsage.st1\",\"rate_code\":\"YQT3C842QHBG6XCU.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.045 per GB-month of Throughput Optimized HDD (st1) provisioned storage - US East (Northern Virginia)\",\"billing_rule\":\"fixed_monthly\",\"unit_price\":0.045,\"quantity\":100,\"unit\":\"GB-month\",\"monthly\":4.5000,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_instance.batch","aws_instance","update","before","ebs_block_device[0] (st1)","AmazonEC2|EBS:VolumeUsage.st1|","YQT3C842QHBG6XCU","EBS:VolumeUsage.st1","YQT3C842QHBG6XCU.JRTCKXETXF.6YS6EN2CT7","$0.045 per GB-month of Throughput Optimized HDD (st1) provisioned storage - US East (Northern Virginia)","fixed_monthly","0.045","100","GB-month","","4.5000","","true",""]},{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_instance.batch\",\"type\":\"aws_instance\",\"action\":\"update\",\"side\":\"after\",\"name\":\"compute on-demand, Linux t4g.small\",\"price_key\":\"AmazonEC2|BoxUsage:t4g.small|RunInstances\",\"sku\":\"9GWX7R3VJUG9P8Y8\",\"usage_type\":\"BoxUsage:t4g.small\",\"rate_code\":\"9GWX7R3VJUG9P8Y8.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.0168 per On Demand Linux t4g.small Instance Hour\",\"billing_rule\":\"fixed_hourly\",\"unit_price\":0.0168,\"quantity\":240,\"unit\":\"h\",\"monthly\":4.0320,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_instance.batch","aws_instance","update","after","compute on-demand, Linux t4g.small","AmazonEC2|BoxUsage:t4g.small|RunInstances","9GWX7R3VJUG9P8Y8","BoxUsage:t4g.small","9GWX7R3VJUG9P8Y8.JRTCKXETXF.6YS6EN2CT7","$0.0168 per On Demand Linux t4g.small Instance Hour","fixed_hourly","0.0168","240","h","","4.0320","","true",""]},{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_instance.batch\",\"type\":\"aws_instance\",\"action\":\"update\",\"side\":\"after\",\"name\":\"root volume (gp3)\",\"price_key\":\"AmazonEC2|EBS:VolumeUsage.gp3|\",\"sku\":\"JG3KUJMBRGHV3N8G\",\"usage_type\":\"EBS:VolumeUsage.gp3\",\"rate_code\":\"JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)\",\"billing_rule\":\"fixed_monthly\",\"unit_price\":0.08,\"quantity\":20,\"unit\":\"GB-month\",\"monthly\":1.6000,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_instance.batch","aws_instance","update","after","root volume (gp3)","AmazonEC2|EBS:VolumeUsage.gp3|","JG3KUJMBRGHV3N8G","EBS:VolumeUsage.gp3","JG3KUJMBRGHV3N8G.JRTCKXETXF.6YS6EN2CT7","$0.08 per GB-month of General Purpose (gp3) provisioned storage - US East (N. Virginia)","fixed_monthly","0.08","20","GB-month","","1.6000","","true",""]},{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_instance.batch\",\"type\":\"aws_instance\",\"action\":\"update\",\"side\":\"after\",\"name\":\"ebs_block_device[0] (st1)\",\"price_key\":\"AmazonEC2|EBS:VolumeUsage.st1|\",\"sku\":\"YQT3C842QHBG6XCU\",\"usage_type\":\"EBS:VolumeUsage.st1\",\"rate_code\":\"YQT3C842QHBG6XCU.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.045 per GB-month of Throughput Optimized HDD (st1) provisioned storage - US East (Northern Virginia)\",\"billing_rule\":\"fixed_monthly\",\"unit_price\":0.045,\"quantity\":100,\"unit\":\"GB-month\",\"monthly\":4.5000,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_instance.batch","aws_instance","update","after","ebs_block_device[0] (st1)","AmazonEC2|EBS:VolumeUsage.st1|","YQT3C842QHBG6XCU","EBS:VolumeUsage.st1","YQT3C842QHBG6XCU.JRTCKXETXF.6YS6EN2CT7","$0.045 per GB-month of Throughput Optimized HDD (st1) provisioned storage - US East (Northern Virginia)","fixed_monthly","0.045","100","GB-month","","4.5000","","true",""]}]},{"module":"(root)","before":"1.00","after":"1.00","delta":"0.00","kind":"priced","sides":[{"side":"before","monthly":"1.00","lines":[{"formula":"1 key-month × $1 = 1.00 (requests not priced)","monthly":"1.00"}]},{"side":"after","monthly":"1.00","lines":[{"formula":"1 key-month × $1 = 1.00 (requests not priced)","monthly":"1.00"}]}],"export":[{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_kms_key.state\",\"type\":\"aws_kms_key\",\"action\":\"no-op\",\"side\":\"before\",\"name\":\"customer managed key\",\"price_key\":\"awskms|KMS-Keys|\",\"sku\":\"U553K98XGDXCYHWS\",\"usage_type\":\"us-east-1-KMS-Keys\",\"rate_code\":\"U553K98XGDXCYHWS.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$1 per customer managed KMS key version in US East (N. Virginia)\",\"billing_rule\":\"fixed_monthly\",\"unit_price\":1,\"quantity\":1,\"unit\":\"key-month\",\"monthly\":1.0000,\"declared\":true,\"note\":\"requests not priced\"}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_kms_key.state","aws_kms_key","no-op","before","customer managed key","awskms|KMS-Keys|","U553K98XGDXCYHWS","us-east-1-KMS-Keys","U553K98XGDXCYHWS.JRTCKXETXF.6YS6EN2CT7","$1 per customer managed KMS key version in US East (N. Virginia)","fixed_monthly","1","1","key-month","","1.0000","","true","requests not priced"]},{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_kms_key.state\",\"type\":\"aws_kms_key\",\"action\":\"no-op\",\"side\":\"after\",\"name\":\"customer managed key\",\"price_key\":\"awskms|KMS-Keys|\",\"sku\":\"U553K98XGDXCYHWS\",\"usage_type\":\"us-east-1-KMS-Keys\",\"rate_code\":\"U553K98XGDXCYHWS.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$1 per customer managed KMS key version in US East (N. Virginia)\",\"billing_rule\":\"fixed_monthly\",\"unit_price\":1,\"quantity\":1,\"unit\":\"key-month\",\"monthly\":1.0000,\"declared\":true,\"note\":\"requests not priced\"}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_kms_key.state","aws_kms_key","no-op","after","customer managed key","awskms|KMS-Keys|","U553K98XGDXCYHWS","us-east-1-KMS-Keys","U553K98XGDXCYHWS.JRTCKXETXF.6YS6EN2CT7","$1 per customer managed KMS key version in US East (N. Virginia)","fixed_monthly","1","1","key-month","","1.0000","","true","requests not priced"]}]},{"module":"(root)","before":"32.85","after":"–","delta":"-32.85","kind":"priced","sides":[{"side":"before","monthly":"32.85","lines":[{"formula":"730 h × $0.045 = 32.85","monthly":"32.85"},{"formula":"usage not declared (gb_per_month), counted as 0","monthly":"0.00"}]}],"export":[{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_nat_gateway.main\",\"type\":\"aws_nat_gateway\",\"action\":\"delete\",\"side\":\"before\",\"name\":\"NAT gateway hours\",\"price_key\":\"AmazonEC2|NatGateway-Hours|NatGateway\",\"sku\":\"M2YSHUBETB3JX4M4\",\"usage_type\":\"NatGateway-Hours\",\"rate_code\":\"M2YSHUBETB3JX4M4.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.045 per NAT Gateway Hour\",\"billing_rule\":\"fixed_hourly\",\"unit_price\":0.045,\"quantity\":730,\"unit\":\"h\",\"monthly\":32.8500,\"declared\":true}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_nat_gateway.main","aws_nat_gateway","delete","before","NAT gateway hours","AmazonEC2|NatGateway-Hours|NatGateway","M2YSHUBETB3JX4M4","NatGateway-Hours","M2YSHUBETB3JX4M4.JRTCKXETXF.6YS6EN2CT7","$0.045 per NAT Gateway Hour","fixed_hourly","0.045","730","h","","32.8500","","true",""]},{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"aws_nat_gateway.main\",\"type\":\"aws_nat_gateway\",\"action\":\"delete\",\"side\":\"before\",\"name\":\"NAT data processed\",\"price_key\":\"AmazonEC2|NatGateway-Bytes|NatGateway\",\"sku\":\"59S5R83GFPUAGVR5\",\"usage_type\":\"NatGateway-Bytes\",\"rate_code\":\"59S5R83GFPUAGVR5.JRTCKXETXF.6YS6EN2CT7\",\"billing_description\":\"$0.045 per GB Data Processed by NAT Gateways\",\"billing_rule\":\"usage\",\"unit_price\":0.045,\"quantity\":0,\"unit\":\"GB\",\"monthly\":0.0000,\"premise\":\"gb_per_month\",\"declared\":false}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","aws_nat_gateway.main","aws_nat_gateway","delete","before","NAT data processed","AmazonEC2|NatGateway-Bytes|NatGateway","59S5R83GFPUAGVR5","NatGateway-Bytes","59S5R83GFPUAGVR5.JRTCKXETXF.6YS6EN2CT7","$0.045 per GB Data Processed by NAT Gateways","usage","0.045","0","GB","","0.0000","gb_per_month","false",""]}]},{"module":"(root)","before":"0.00","after":"0.00","delta":"0.00","kind":"no_charge","sides":[{"side":"before","monthly":"0.00","lines":[]},{"side":"after","monthly":"0.00","lines":[]}],"export":[]},{"module":"module.dns","before":"0.50","after":"0.50","delta":"0.00","kind":"priced","sides":[{"side":"before","monthly":"0.50","lines":[{"formula":"1 zone-month × $0.5 = 0.50 (first-25-zones tier)","monthly":"0.50"}]},{"side":"after","monthly":"0.50","lines":[{"formula":"1 zone-month × $0.5 = 0.50 (first-25-zones tier)","monthly":"0.50"}]}],"export":[{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"module.dns.aws_route53_zone.this[\\\"example.com\\\"]\",\"type\":\"aws_route53_zone\",\"action\":\"no-op\",\"side\":\"before\",\"name\":\"hosted zone\",\"price_key\":\"AmazonRoute53|HostedZone|\",\"sku\":\"KVPGEJE88UW8S779\",\"usage_type\":\"HostedZone\",\"rate_code\":\"KVPGEJE88UW8S779.JRTCKXETXF.G2A93NZ7DT\",\"billing_description\":\"$0.50 per Hosted Zone for the first 25 Hosted Zones\",\"billing_rule\":\"fixed_monthly\",\"unit_price\":0.5,\"quantity\":1,\"unit\":\"zone-month\",\"monthly\":0.5000,\"declared\":true,\"note\":\"first-25-zones tier\"}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","module.dns.aws_route53_zone.this[\"example.com\"]","aws_route53_zone","no-op","before","hosted zone","AmazonRoute53|HostedZone|","KVPGEJE88UW8S779","HostedZone","KVPGEJE88UW8S779.JRTCKXETXF.G2A93NZ7DT","$0.50 per Hosted Zone for the first 25 Hosted Zones","fixed_monthly","0.5","1","zone-month","","0.5000","","true","first-25-zones tier"]},{"jsonl":"{\"schema_version\":1,\"kind\":\"costgate.line\",\"tool\":\"costgate\",\"version\":\"test\",\"region\":\"us-east-1\",\"currency\":\"USD\",\"pricing_as_of\":\"2026-11-11T15:35:57Z\",\"pricing_sha256\":\"15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744\",\"address\":\"module.dns.aws_route53_zone.this[\\\"example.com\\\"]\",\"type\":\"aws_route53_zone\",\"action\":\"no-op\",\"side\":\"after\",\"name\":\"hosted zone\",\"price_key\":\"AmazonRoute53|HostedZone|\",\"sku\":\"KVPGEJE88UW8S779\",\"usage_type\":\"HostedZone\",\"rate_code\":\"KVPGEJE88UW8S779.JRTCKXETXF.G2A93NZ7DT\",\"billing_description\":\"$0.50 per Hosted Zone for the first 25 Hosted Zones\",\"billing_rule\":\"fixed_monthly\",\"unit_price\":0.5,\"quantity\":1,\"unit\":\"zone-month\",\"monthly\":0.5000,\"declared\":true,\"note\":\"first-25-zones tier\"}","csv":["1","costgate.line","costgate","test","us-east-1","USD","2026-11-11T15:35:57Z","15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744","module.dns.aws_route53_zone.this[\"example.com\"]","aws_route53_zone","no-op","after","hosted zone","AmazonRoute53|HostedZone|","KVPGEJE88UW8S779","HostedZone","KVPGEJE88UW8S779.JRTCKXETXF.G2A93NZ7DT","$0.50 per Hosted Zone for the first 25 Hosted Zones","fixed_monthly","0.5","1","zone-month","","0.5000","","true","first-25-zones tier"]}]}],"modules":[{"key":"(root)","count":7,"changed":6,"unpriced":0,"before":"73.02","after":"21.32","delta":"-51.70","sign":-1,"bar_after":1000,"bar_delta":1000},{"key":"module.dns","count":1,"changed":0,"unpriced":0,"before":"0.50","after":"0.50","delta":"0.00","sign":0,"bar_after":23,"bar_delta":0}],"types":[{"key":"aws_instance","count":2,"changed":2,"unpriced":0,"before":"33.92","after":"16.32","delta":"-17.60","sign":-1,"bar_after":1000,"bar_delta":535},{"key":"aws_ebs_volume","count":1,"changed":1,"unpriced":0,"before":"1.60","after":"4.00","delta":"+2.40","sign":1,"bar_after":245,"bar_delta":73},{"key":"aws_kms_key","count":1,"changed":0,"unpriced":0,"before":"1.00","after":"1.00","delta":"0.00","sign":0,"bar_after":61,"bar_delta":0},{"key":"aws_route53_zone","count":1,"changed":0,"unpriced":0,"before":"0.50","after":"0.50","delta":"0.00","sign":0,"bar_after":30,"bar_delta":0},{"key":"aws_eip","count":1,"changed":1,"unpriced":0,"before":"3.65","after":"0.00","delta":"-3.65","sign":-1,"bar_after":0,"bar_delta":111},{"key":"aws_nat_gateway","count":1,"changed":1,"unpriced":0,"before":"32.85","after":"0.00","delta":"-32.85","sign":-1,"bar_after":0,"bar_delta":1000},{"key":"aws_route_table","count":1,"changed":1,"unpriced":0,"before":"0.00","after":"0.00","delta":"0.00","sign":0,"bar_after":0,"bar_delta":0}],"unpriced":[],"premises":[{"resource":2,"side":"after","line":0},{"resource":5,"side":"before","line":1,"per_unit":"US$ 0.045 per GB"}],"region":{"priced":"us-east-1","snapshot":"us-east-1","mismatch":[]},"csv_header":["schema_version","kind","tool","version","region","currency","pricing_as_of","pricing_sha256","address","type","action","side","name","price_key","sku","usage_type","rate_code","billing_description","billing_rule","unit_price","quantity","unit","factor","monthly","premise","declared","note"],"footer":"on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included.","sha256_short":"15582beb60a1","status_text":{"title":"ok","headline":"-US$ 51.70/month"}}}</script>
+</body>
+</html>

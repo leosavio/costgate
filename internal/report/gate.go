@@ -1,5 +1,5 @@
 // Package report evaluates the gate and renders the estimate as Markdown
-// (pull request comment) and JSON.
+// (pull request comment), JSON, JSON Lines and a self-contained HTML page.
 package report
 
 import (

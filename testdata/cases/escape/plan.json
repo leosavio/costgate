@@ -1,0 +1,59 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.11.0",
+  "planned_values": {"root_module": {}},
+  "resource_changes": [
+    {
+      "address": "aws_kms_key.app[\"</script><img src=x onerror=alert(1)>\"]",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"description": "</script><img src=x onerror=alert(1)>", "region": "us-east-1"},
+        "after_unknown": {"id": true}
+      }
+    },
+    {
+      "address": "module.m[\"a.b</script><img src=x onerror=alert(1)>\"].aws_kms_key.k",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "k",
+      "provider_name": "registry.terraform.io/evil/</script><img src=x onerror=alert(1)>",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"description": "k"},
+        "after_unknown": {"id": true}
+      }
+    },
+    {
+      "address": "aws_s3_bucket.b[\"<img src=x onerror=alert(1)>\"]",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "b",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"bucket": "example-escape"},
+        "after_unknown": {"id": true}
+      }
+    },
+    {
+      "address": "aws_instance.i",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "i",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"ami": "ami-0123456789abcdef0", "instance_type": "</script><img src=x onerror=alert(1)>"},
+        "after_unknown": {"id": true}
+      }
+    }
+  ]
+}

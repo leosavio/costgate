@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -58,7 +60,12 @@ func TestRefreshFixtureGolden(t *testing.T) {
 	golden(t, filepath.Join(root, "pricing.golden.json"), got)
 }
 
-func runCase(t *testing.T, dir, snapshot string) (md, js, jl []byte, code int) {
+type caseOutput struct {
+	md, js, jl, html []byte
+	code             int
+}
+
+func runCase(t *testing.T, dir, snapshot string) caseOutput {
 	t.Helper()
 	args := []string{"diff", "--plan", filepath.Join(dir, "plan.json"), "--pricing", snapshot}
 	if _, err := os.Stat(filepath.Join(dir, "usage.json")); err == nil {
@@ -67,23 +74,24 @@ func runCase(t *testing.T, dir, snapshot string) (md, js, jl []byte, code int) {
 	if extra, err := os.ReadFile(filepath.Join(dir, "args.txt")); err == nil {
 		args = append(args, strings.Fields(string(extra))...)
 	}
-	jsonPath := filepath.Join(t.TempDir(), "report.json")
-	linesPath := filepath.Join(t.TempDir(), "report.jsonl")
-	args = append(args, "--json-out", jsonPath, "--json-lines", linesPath)
+	tmp := t.TempDir()
+	jsonPath := filepath.Join(tmp, "report.json")
+	linesPath := filepath.Join(tmp, "report.jsonl")
+	htmlPath := filepath.Join(tmp, "report.html")
+	args = append(args, "--json-out", jsonPath, "--json-lines", linesPath, "--html-out", htmlPath)
 	var stdout, stderr bytes.Buffer
-	code = Run(args, Env{Version: "test", Stdout: &stdout, Stderr: &stderr})
+	out := caseOutput{code: Run(args, Env{Version: "test", Stdout: &stdout, Stderr: &stderr})}
 	if stderr.Len() > 0 {
 		t.Fatalf("stderr: %s", stderr.String())
 	}
-	js, err := os.ReadFile(jsonPath)
-	if err != nil {
-		t.Fatal(err)
+	out.md = stdout.Bytes()
+	var err error
+	for path, dst := range map[string]*[]byte{jsonPath: &out.js, linesPath: &out.jl, htmlPath: &out.html} {
+		if *dst, err = os.ReadFile(path); err != nil {
+			t.Fatal(err)
+		}
 	}
-	jl, err = os.ReadFile(linesPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return stdout.Bytes(), js, jl, code
+	return out
 }
 
 func TestGoldenCases(t *testing.T) {
@@ -94,19 +102,198 @@ func TestGoldenCases(t *testing.T) {
 	}
 	for _, dir := range dirs {
 		t.Run(filepath.Base(dir), func(t *testing.T) {
-			md, js, jl, code := runCase(t, dir, snapshot)
-			golden(t, filepath.Join(dir, "want.md"), md)
-			golden(t, filepath.Join(dir, "want.json"), js)
-			golden(t, filepath.Join(dir, "want.jsonl"), jl)
-			golden(t, filepath.Join(dir, "want_exit"), []byte(strconv.Itoa(code)+"\n"))
-			checkJSONLines(t, js, jl)
+			o := runCase(t, dir, snapshot)
+			golden(t, filepath.Join(dir, "want.md"), o.md)
+			golden(t, filepath.Join(dir, "want.json"), o.js)
+			golden(t, filepath.Join(dir, "want.jsonl"), o.jl)
+			golden(t, filepath.Join(dir, "want.html"), o.html)
+			golden(t, filepath.Join(dir, "want_exit"), []byte(strconv.Itoa(o.code)+"\n"))
+			checkJSONLines(t, o.js, o.jl)
+			checkHTML(t, o.html, o.js, o.jl)
 
 			// Determinism: a second run produces the same bytes.
-			md2, js2, jl2, code2 := runCase(t, dir, snapshot)
-			if !bytes.Equal(md, md2) || !bytes.Equal(js, js2) || !bytes.Equal(jl, jl2) || code != code2 {
+			o2 := runCase(t, dir, snapshot)
+			if !bytes.Equal(o.md, o2.md) || !bytes.Equal(o.js, o2.js) || !bytes.Equal(o.jl, o2.jl) ||
+				!bytes.Equal(o.html, o2.html) || o.code != o2.code {
 				t.Error("second run differs from the first")
 			}
 		})
+	}
+}
+
+const dataOpen, scriptClose = `<script type="application/json" id="costgate-data">`, "</script>"
+
+// pageData returns the JSON embedded in an HTML report.
+func pageData(t *testing.T, page []byte) []byte {
+	t.Helper()
+	_, rest, ok := bytes.Cut(page, []byte(dataOpen))
+	if !ok {
+		t.Fatal("html: no data element")
+	}
+	data, _, ok := bytes.Cut(rest, []byte(scriptClose))
+	if !ok {
+		t.Fatal("html: data element not closed")
+	}
+	return data
+}
+
+func decodeNumbers(t *testing.T, data []byte, v any) {
+	t.Helper()
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(v); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// checkHTML asserts that the page is self-contained, that it embeds the JSON
+// report unchanged, and that its export matches the JSON Lines output.
+func checkHTML(t *testing.T, page, js, jl []byte) {
+	t.Helper()
+	// The page without its data: nothing in it may load a resource.
+	shell := bytes.Replace(page, pageData(t, page), nil, 1)
+	for _, s := range []string{"__CSP__", "__VERSION__", "__CSS__", "__JS__", "__DATA__", "unsafe-inline",
+		"http://", "https://", "src=", "<link", "<iframe", "@import", "url("} {
+		if bytes.Contains(shell, []byte(s)) {
+			t.Errorf("html contains %q", s)
+		}
+	}
+	if !bytes.Contains(page, []byte(`content="default-src 'none'; script-src 'sha256-`)) {
+		t.Error("html: no Content-Security-Policy with default-src 'none'")
+	}
+	var data struct {
+		Report json.RawMessage `json:"report"`
+		View   struct {
+			Premises []struct {
+				Resource int    `json:"resource"`
+				PerUnit  string `json:"per_unit"`
+			} `json:"premises"`
+			CSVHeader []string `json:"csv_header"`
+			Resources []struct {
+				Export []struct {
+					JSONL string   `json:"jsonl"`
+					CSV   []string `json:"csv"`
+				} `json:"export"`
+			} `json:"resources"`
+		} `json:"view"`
+	}
+	decodeNumbers(t, pageData(t, page), &data)
+	var embedded, want any
+	decodeNumbers(t, data.Report, &embedded)
+	decodeNumbers(t, js, &want)
+	if !reflect.DeepEqual(embedded, want) {
+		t.Error("html: embedded report differs from the JSON report")
+	}
+	// The premises panel lists as missing exactly the usage_not_declared of the report.
+	var rep struct {
+		Resources []struct {
+			Address string `json:"address"`
+		} `json:"resources"`
+		Undeclared []struct {
+			Address string `json:"address"`
+		} `json:"usage_not_declared"`
+	}
+	decodeNumbers(t, js, &rep)
+	var missing, undeclared []string
+	for _, p := range data.View.Premises {
+		if p.PerUnit != "" {
+			missing = append(missing, rep.Resources[p.Resource].Address)
+		}
+	}
+	for _, u := range rep.Undeclared {
+		undeclared = append(undeclared, u.Address)
+	}
+	if !slices.Equal(missing, undeclared) {
+		t.Errorf("html: premises missing %q, report usage_not_declared %q", missing, undeclared)
+	}
+	var lines strings.Builder
+	for _, r := range data.View.Resources {
+		for _, x := range r.Export {
+			lines.WriteString(x.JSONL + "\n")
+			var doc map[string]any
+			decodeNumbers(t, []byte(x.JSONL), &doc)
+			if len(x.CSV) != len(data.View.CSVHeader) {
+				t.Fatalf("csv: %d cells, header has %d", len(x.CSV), len(data.View.CSVHeader))
+			}
+			for k := range doc {
+				if !slices.Contains(data.View.CSVHeader, k) {
+					t.Errorf("csv header misses the JSON Lines field %s", k)
+				}
+			}
+			for i, k := range data.View.CSVHeader {
+				cell := ""
+				switch v := doc[k].(type) {
+				case string:
+					cell = v
+				case json.Number:
+					cell = v.String()
+				case bool:
+					cell = strconv.FormatBool(v)
+				}
+				if x.CSV[i] != cell {
+					t.Errorf("csv %s = %q, json lines has %q", k, x.CSV[i], cell)
+				}
+			}
+		}
+	}
+	// The export holds the cost lines only: warnings and ignored resources
+	// have their own panels.
+	var costLines strings.Builder
+	for _, l := range strings.SplitAfter(string(jl), "\n") {
+		if strings.Contains(l, `"kind":"costgate.line"`) {
+			costLines.WriteString(l)
+		}
+	}
+	if lines.String() != costLines.String() {
+		t.Error("html: export lines differ from the cost lines of the JSON Lines output")
+	}
+}
+
+// TestHTMLEscaping renders addresses, a provider and an instance type that
+// try to close the data <script> element and inject markup.
+func TestHTMLEscaping(t *testing.T) {
+	const payload = "</script><img src=x onerror=alert(1)>"
+	o := runCase(t, filepath.Join(root, "cases", "escape"), fixtureSnapshot(t))
+	if n := bytes.Count(o.html, []byte(scriptClose)); n != 2 {
+		t.Errorf("html has %d %s, want 2 (script and data)", n, scriptClose)
+	}
+	if bytes.Contains(o.html, []byte("<img")) {
+		t.Error("html contains raw <img markup")
+	}
+	var data struct {
+		Report struct {
+			Resources []struct {
+				Address string `json:"address"`
+				After   struct {
+					Unpriced string `json:"unpriced"`
+				} `json:"after"`
+			} `json:"resources"`
+		} `json:"report"`
+		View struct {
+			Modules []struct {
+				Key string `json:"key"`
+			} `json:"modules"`
+		} `json:"view"`
+	}
+	decodeNumbers(t, pageData(t, o.html), &data)
+	var found, reasons int
+	for _, r := range data.Report.Resources {
+		if strings.Contains(r.Address, payload) || strings.Contains(r.Address, "<img src=x onerror=alert(1)>") {
+			found++
+		}
+		if strings.Contains(r.After.Unpriced, payload) {
+			reasons++
+		}
+	}
+	if found != 3 || reasons != 2 {
+		t.Errorf("payload round trip: %d addresses (want 3), %d reasons (want 2)", found, reasons)
+	}
+	modules := map[string]bool{}
+	for _, m := range data.View.Modules {
+		modules[m.Key] = true
+	}
+	if !modules[`module.m["a.b`+payload+`"]`] || !modules["(root)"] || len(modules) != 2 {
+		t.Errorf("modules: %v", modules)
 	}
 }
 
@@ -211,10 +398,11 @@ func checkJSONLines(t *testing.T, js, jl []byte) {
 // written by costgate 0.1.x: same totals, empty v2 billing fields.
 func TestV1SnapshotStillLoads(t *testing.T) {
 	dir := filepath.Join(root, "cases", "baseline")
-	_, jsV2, _, code := runCase(t, dir, fixtureSnapshot(t))
-	_, jsV1, _, codeV1 := runCase(t, dir, filepath.Join(root, "pricing.v1.json"))
-	if code != codeV1 {
-		t.Fatalf("exit %d with v2, %d with v1", code, codeV1)
+	v2 := runCase(t, dir, fixtureSnapshot(t))
+	v1 := runCase(t, dir, filepath.Join(root, "pricing.v1.json"))
+	jsV2, jsV1 := v2.js, v1.js
+	if v2.code != v1.code {
+		t.Fatalf("exit %d with v2, %d with v1", v2.code, v1.code)
 	}
 	type totals struct {
 		Totals map[string]json.Number `json:"totals"`

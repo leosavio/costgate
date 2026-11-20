@@ -28,6 +28,7 @@ flowchart LR
     usage["usage.json<br/>premises, optional"] --> diff
     diff --> md["Markdown<br/>PR comment"]
     diff --> js["JSON report<br/>and JSON Lines"]
+    diff --> html["HTML report<br/>one file, optional"]
     diff --> code["exit code<br/>0, 1, 2 or 3"]
   end
   bin --> diff
@@ -120,7 +121,7 @@ flowchart TD
   free --> gate["gate"]
   unpriced --> gate
   line --> gate
-  gate --> render["Markdown, JSON, JSON Lines<br/>and the exit code"]
+  gate --> render["Markdown, JSON, JSON Lines,<br/>optional HTML, and the exit code"]
   ignored --> render
 ```
 
@@ -226,11 +227,36 @@ incomplete. costgate only returns the code; accepting exit 1 or 2 (for example w
 | Markdown (stdout by default, `--markdown-out`) | first line `<!-- costgate -->`, so a CI job can find and update its own comment; warnings with their fix, totals, checks, one row per changed resource with the formula, a collapsed block with the bill keys of each cost line, unpriced resources and their reasons, premises not declared, the resources of ignored providers, and a footer with the costgate version, the snapshot date and hash, and `--ignore-provider` when set |
 | JSON report (`--format json`, `--json-out`) | the same data for machines, `schema_version` 1; `warnings`, `ignored_providers` and `ignored` only when they apply |
 | JSON Lines (`--json-lines`) | one standalone document per cost line, for Athena, `jq` or any line-oriented tool; warnings first (`kind: costgate.warning`) and ignored resources last (`kind: costgate.ignored`) when they apply |
+| HTML report (`--html-out`) | one self-contained page to audit the run in a browser: the JSON report embedded, warnings with their fix, bars by module and by type, a filterable resource table with the cost lines and bill keys, unpriced resources by reason, premises declared and missing, the priced region, the resources of ignored providers, and a CSV or JSON Lines export of the filtered lines |
 | Exit code | 0, 1, 2 or 3, as above |
 
 The report lists resource addresses as they appear in the plan, including `for_each` keys, and the
 attribute values that a formula or an unpriced reason uses (instance type, volume type, region,
 counts). No other attribute of the plan is copied to the output.
+
+### The HTML report
+
+`report.HTML` renders the same estimate and verdict as the other outputs, after the gate, so the
+page cannot change the exit code. It fills one template (`internal/report/assets/page.html`, with
+`page.css` and `page.js`, embedded in the binary with `go:embed`) with one JSON value:
+
+| Key | Content |
+|---|---|
+| `report` | the JSON report of the run, the same value as `--format json`, encoded with `json.Marshal` |
+| `view` | what the page shows and the browser should not compute: amounts formatted by `internal/money`, totals and bar lengths per module and per type, unpriced resources grouped by reason, the premise lines, the region warnings, and, per resource, the JSON Lines documents of `--json-lines` and the same values as CSV cells |
+
+The script reads both, builds the page with `textContent` (never `innerHTML`) and does no
+arithmetic on money: an amount on the page is a string computed in Go with `math/big`, as in the
+Markdown. The export joins the precomputed documents of the filtered resources, so a JSON Lines
+download of every resource equals the `--json-lines` file byte for byte. The test of each golden
+checks that, and that the embedded `report` equals the JSON report.
+
+| Guarantee | How |
+|---|---|
+| No network | CSS and JavaScript inline; `Content-Security-Policy: default-src 'none'`, script and style allowed only by their sha256, so any other script, image, font or request is blocked |
+| Plan strings cannot break out | `json.Marshal` escapes `<`, `>` and `&`, so `</script>` inside an address cannot close the data element; the page puts strings into the DOM as text. [`testdata/cases/escape`](../testdata/cases/escape) carries `</script><img src=x onerror=alert(1)>` in addresses, a provider and an instance type |
+| Same bytes on every run | no clock (dates come from the snapshot), no map order, the hashes in the CSP depend only on the embedded files |
+| Checked in a browser | [`scripts/html-check.sh`](../scripts/html-check.sh) opens every `want.html` in headless Chrome with several URL-fragment filters; the page sets `data-status="ok"` on `<body>` only when it rendered without a script error or a CSP violation |
 
 ## 3. One resource, end to end
 
@@ -288,7 +314,7 @@ job is in [integration/github-actions.md](integration/github-actions.md).
 | Money never uses `float64` | fused multiply-add can round differently on arm64 and amd64; `math/big.Rat` is exact everywhere |
 | Output order is fixed | resources in plan order, lines in formula order, JSON fields in a fixed order |
 | No clock | `as_of` comes from the offer files |
-| Proven in CI | the golden files in `testdata/` are compared byte for byte on native Linux and macOS runners, arm64 and amd64 |
+| Proven in CI | the golden files in `testdata/` (Markdown, JSON, JSON Lines and HTML) are compared byte for byte on native Linux and macOS runners, arm64 and amd64 |
 
 The same costgate version with the same plan and premises gives the same output on any machine,
 today or a year from now, because the prices travel with the binary.
