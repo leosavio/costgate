@@ -1,6 +1,7 @@
 package estimate
 
 import (
+	"math/big"
 	"strings"
 	"testing"
 
@@ -60,7 +61,10 @@ func TestEmbeddedSnapshotHasEveryKey(t *testing.T) {
 	keys := []string{keyNATHours, keyNATBytes, keyIPv4, keyEndpointHours, keyEndpointBytes, keyTGWVPCHours,
 		keyTGWVPCBytes, keyTGWPeerHours, keyTGWVPNHours, keyTGWVPNBytes, keyVPNHours, keyHostedZone,
 		keyResolverENI, keyKMSKey, keyS3Standard, keyTrailEvents, keyPCAGeneral, keyPCAShortLived,
-		keyGP3IOPS, keyGP3Throughput, keyEKSCluster, keyEKSExtended}
+		keyGP3IOPS, keyGP3Throughput, keyEKSCluster, keyEKSExtended, keySecret}
+	for _, code := range eksTiers {
+		keys = append(keys, eksTierKey(code))
+	}
 	for _, ut := range ebsUsageTypes {
 		keys = append(keys, catalog.Key("AmazonEC2", ut, ""))
 	}
@@ -79,7 +83,7 @@ func TestEmbeddedSnapshotHasEveryKey(t *testing.T) {
 		}
 	}
 	// The keys of the most common resources exist in every region.
-	core := []string{keyNATHours, keyNATBytes, keyIPv4, keyKMSKey, keyS3Standard, keyEKSCluster,
+	core := []string{keyNATHours, keyNATBytes, keyIPv4, keyKMSKey, keyS3Standard, keyEKSCluster, keySecret,
 		catalog.Key("AmazonEC2", "EBS:VolumeUsage.gp3", "")}
 	for _, region := range pricing.Regions() {
 		snap := embedded(t, region)
@@ -475,11 +479,135 @@ func TestEKSCluster(t *testing.T) {
 		dec.Lines[3].UsageType != "EKS-Auto:m5.large-management-hours") {
 		t.Errorf("declared lines out of order: %+v", dec.Lines)
 	}
-	for _, addr := range []string{"aws_eks_cluster.outpost", "aws_eks_cluster.xl"} {
-		if r := got[addr]; r.UnpricedReason() != ReasonConfig || !r.Blocking {
-			t.Errorf("%s: %q %q", addr, r.UnpricedReason(), r.Unpriced())
+	if r := got["aws_eks_cluster.outpost"]; r.UnpricedReason() != ReasonConfig || !r.Blocking {
+		t.Errorf("outpost: %q %q", r.UnpricedReason(), r.Unpriced())
+	}
+	// tier-xl: the provisioned tier hour on top of the control plane hour.
+	xlPrice, _ := snap.Lookup(eksTierKey("XL"))
+	xl := got["aws_eks_cluster.xl"].After
+	wantXL := money.Add(money.Int(73), money.Mul(xlPrice, money.Int(730)))
+	if len(xl.Lines) != 2 || xl.Lines[1].Name != "provisioned control plane, tier-xl" || xl.Monthly.Cmp(wantXL) != 0 ||
+		xl.Lines[1].UsageType != "USE1-AmazonEKS-Hours:XL-ProvisionedTier" || xl.Lines[1].BillingRule != BillingFixedHourly {
+		t.Errorf("tier-xl: %s, want %s; %+v", money.Fixed(xl.Monthly, 2), money.Fixed(wantXL, 2), xl.Lines)
+	}
+	if n := got["aws_eks_cluster.std"].After.Lines[0].Note; !strings.Contains(n, "standard tier: the plan has no control_plane_scaling_config") {
+		t.Errorf("standard tier note: %q", n)
+	}
+}
+
+func TestEKSTierEdges(t *testing.T) {
+	doc := `{"format_version": "1.2", "resource_changes": [
+	  {"address": "aws_eks_cluster.big", "mode": "managed", "type": "aws_eks_cluster", "provider_name": "registry.terraform.io/hashicorp/aws",
+	   "change": {"actions": ["create"], "before": null, "after": {"name": "b", "control_plane_scaling_config": [{"tier": "tier-16xl"}]}}},
+	  {"address": "aws_eks_cluster.unk", "mode": "managed", "type": "aws_eks_cluster", "provider_name": "registry.terraform.io/hashicorp/aws",
+	   "change": {"actions": ["create"], "before": null, "after": {"name": "u", "control_plane_scaling_config": [{}]},
+	    "after_unknown": {"control_plane_scaling_config": [{"tier": true}]}}},
+	  {"address": "aws_eks_cluster.std", "mode": "managed", "type": "aws_eks_cluster", "provider_name": "registry.terraform.io/hashicorp/aws",
+	   "change": {"actions": ["create"], "before": null, "after": {"name": "s", "control_plane_scaling_config": [{"tier": "standard"}]}}}
+	]}`
+	res, err := Estimate(parsePlan(t, doc), only(t, "us-east-1"), usage.Empty(), Options{Region: "us-east-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := byAddress(t, res)
+	if r := got["aws_eks_cluster.big"]; r.Unpriced() != `provisioned control plane tier "tier-16xl" is not modeled` {
+		t.Errorf("unknown tier: %q", r.Unpriced())
+	}
+	if r := got["aws_eks_cluster.unk"]; r.Unpriced() != "control_plane_scaling_config.tier unknown at plan time" {
+		t.Errorf("tier unknown: %q", r.Unpriced())
+	}
+	if s := got["aws_eks_cluster.std"].After; len(s.Lines) != 1 || strings.Contains(s.Lines[0].Note, "standard tier") {
+		t.Errorf("explicit standard: %+v", s.Lines)
+	}
+}
+
+func TestEKSNodeGroup(t *testing.T) {
+	ng := func(name, after string) string {
+		return `{"address": "aws_eks_node_group.` + name + `", "mode": "managed", "type": "aws_eks_node_group", "provider_name": "registry.terraform.io/hashicorp/aws",
+	   "change": {"actions": ["create"], "before": null, "after": ` + after + `}}`
+	}
+	doc := `{"format_version": "1.2", "resource_changes": [` + strings.Join([]string{
+		ng("od", `{"instance_types": ["m7g.large", "m6g.large"], "capacity_type": "ON_DEMAND", "ami_type": "AL2023_ARM_64_STANDARD", "disk_size": 50, "scaling_config": [{"desired_size": 3, "min_size": 1, "max_size": 5}]}`),
+		ng("spot", `{"instance_types": ["c7g.xlarge"], "capacity_type": "SPOT", "scaling_config": [{"desired_size": 2}]}`),
+		ng("default", `{"instance_types": [], "scaling_config": [{"desired_size": 1}]}`),
+		ng("lt", `{"instance_types": ["m5.large"], "launch_template": [{"name": "lt", "version": "1"}], "scaling_config": [{"desired_size": 2}]}`),
+		ng("ltonly", `{"instance_types": [], "launch_template": [{"name": "lt", "version": "1"}], "scaling_config": [{"desired_size": 2}]}`),
+		ng("win", `{"instance_types": ["m5.large"], "ami_type": "WINDOWS_CORE_2022_x86_64", "scaling_config": [{"desired_size": 1}]}`),
+		ng("unk", `{"instance_types": ["m5.large"], "scaling_config": [{}]}`),
+	}, ",") + `]}`
+	use, err := usage.Load([]byte(`{"schema_version": 1, "resources": {"aws_eks_node_group.spot": {"spot_discount": 0.6}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap := embedded(t, "us-east-1")
+	res, err := Estimate(parsePlan(t, doc), fixed(snap), use, Options{Region: "us-east-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := byAddress(t, res)
+	price := func(it string) *big.Rat { p, _ := snap.Lookup(instanceKey(it)); return p }
+	gp2, _ := snap.Lookup(catalog.Key("AmazonEC2", "EBS:VolumeUsage.gp2", ""))
+
+	od := got["aws_eks_node_group.od"].After
+	wantOD := money.Add(money.Mul(price("m7g.large"), money.Int(730*3)), money.Mul(gp2, money.Int(150)))
+	if od.Unpriced != "" || len(od.Lines) != 2 || od.Monthly.Cmp(wantOD) != 0 || !strings.Contains(od.Lines[0].Note, "first of 2 instance_types") ||
+		od.Lines[0].Quantity.Cmp(money.Int(2190)) != 0 || od.Lines[1].Quantity.Cmp(money.Int(150)) != 0 {
+		t.Errorf("on-demand: %s, want %s; %+v", money.Fixed(od.Monthly, 4), money.Fixed(wantOD, 4), od.Lines)
+	}
+	spot := got["aws_eks_node_group.spot"].After
+	wantSpot := money.Add(money.Mul(price("c7g.xlarge"), money.Int(1460), money.Sub(money.Int(1), mustRat(t, "0.6"))), money.Mul(gp2, money.Int(40)))
+	if spot.Monthly.Cmp(wantSpot) != 0 || spot.Lines[0].Premise != "spot_discount" || spot.Lines[0].BillingRule != BillingUsage {
+		t.Errorf("spot: %s, want %s; %+v", money.Fixed(spot.Monthly, 4), money.Fixed(wantSpot, 4), spot.Lines)
+	}
+	if d := got["aws_eks_node_group.default"].After; len(d.Lines) != 2 || d.Lines[0].PriceKey != instanceKey("t3.medium") ||
+		!strings.Contains(d.Lines[1].Note, "EKS default 20 GB") {
+		t.Errorf("default: %+v", d.Lines)
+	}
+	if lt := got["aws_eks_node_group.lt"].After; len(lt.Lines) != 2 || lt.Lines[1].Quantity.Cmp(money.Int(16)) != 0 ||
+		!strings.Contains(lt.Lines[1].Note, "root_volume_gb premise 8 GB") {
+		t.Errorf("launch template: %+v", lt.Lines)
+	}
+	for addr, want := range map[string]string{
+		"aws_eks_node_group.ltonly": "instance type set by the launch template, which the node group does not carry in the plan",
+		"aws_eks_node_group.win":    `ami_type "WINDOWS_CORE_2022_x86_64" is not modeled (only Amazon Linux and Bottlerocket)`,
+		"aws_eks_node_group.unk":    "scaling_config.desired_size unknown at plan time",
+	} {
+		if r := got[addr]; r.Unpriced() != want || r.UnpricedReason() != ReasonConfig {
+			t.Errorf("%s: %q", addr, r.Unpriced())
 		}
 	}
+}
+
+func TestSecretsManagerSecret(t *testing.T) {
+	doc := `{"format_version": "1.2", "resource_changes": [
+	  {"address": "aws_secretsmanager_secret.db", "mode": "managed", "type": "aws_secretsmanager_secret", "provider_name": "registry.terraform.io/hashicorp/aws",
+	   "change": {"actions": ["create"], "before": null, "after": {"name": "db", "replica": [{"region": "us-west-2"}, {"region": "eu-west-1"}]}}},
+	  {"address": "aws_secretsmanager_secret_version.db", "mode": "managed", "type": "aws_secretsmanager_secret_version", "provider_name": "registry.terraform.io/hashicorp/aws",
+	   "change": {"actions": ["create"], "before": null, "after": {}}}
+	]}`
+	snap := embedded(t, "us-east-1")
+	res, err := Estimate(parsePlan(t, doc), fixed(snap), usage.Empty(), Options{Region: "us-east-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := byAddress(t, res)
+	p, _ := snap.Lookup(keySecret)
+	s := got["aws_secretsmanager_secret.db"].After
+	if len(s.Lines) != 2 || s.Monthly.Cmp(money.Mul(p, money.Int(3))) != 0 || s.Lines[0].UsageType != "USE1-AWSSecretsManager-Secrets" {
+		t.Errorf("secret: %s %+v", money.Fixed(s.Monthly, 2), s.Lines)
+	}
+	if v := got["aws_secretsmanager_secret_version.db"]; !v.ZeroCost || v.Unpriced() != "" {
+		t.Errorf("secret version: %+v", v)
+	}
+}
+
+func mustRat(t *testing.T, s string) *big.Rat {
+	t.Helper()
+	r, err := money.Parse(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }
 
 func TestEstimatorsAndZeroCostDoNotOverlap(t *testing.T) {

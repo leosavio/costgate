@@ -23,19 +23,22 @@ func TestRefreshFiltersOnDemandLinuxShared(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]string{
-		Key("AmazonEC2", "BoxUsage:t3.micro", "RunInstances"):                    "0.0104000000",
-		Key("AmazonEC2", "BoxUsage:t4g.micro", "RunInstances"):                   "0.0084000000",
-		Key("AmazonEC2", "NatGateway-Hours", "NatGateway"):                       "0.0450000000",
-		Key("AmazonVPC", "PublicIPv4:InUseAddress", ""):                          "0.0050000000",
-		Key("AmazonVPC", "TransitGateway-Hours", "TransitGatewayVPC"):            "0.0500000000",
-		Key("AmazonRoute53", "HostedZone", ""):                                   "0.5000000000",
-		Key("awskms", "KMS-Keys", ""):                                            "1.0000000000",
-		Key("AmazonS3", "TimedStorage-ByteHrs", ""):                              "0.0230000000",
-		Key("AmazonEC2", "EBS:VolumeP-IOPS.gp3", ""):                             "0.0050000000",
-		Key("AmazonEC2", "EBS:VolumeP-Throughput.gp3", ""):                       "40.9600000000",
-		Key("AmazonEKS", "AmazonEKS-Hours:perCluster", "CreateOperation"):        "0.1000000000",
-		Key("AmazonEKS", "AmazonEKS-Hours:extendedSupport", "ExtendedSupport"):   "0.5000000000",
-		Key("AmazonEKS", "EKS-Auto:c6a.xlarge-management-hours", "EKSAutoUsage"): "0.0183600000",
+		Key("AmazonEC2", "BoxUsage:t3.micro", "RunInstances"):                                   "0.0104000000",
+		Key("AmazonEC2", "BoxUsage:t4g.micro", "RunInstances"):                                  "0.0084000000",
+		Key("AmazonEC2", "NatGateway-Hours", "NatGateway"):                                      "0.0450000000",
+		Key("AmazonVPC", "PublicIPv4:InUseAddress", ""):                                         "0.0050000000",
+		Key("AmazonVPC", "TransitGateway-Hours", "TransitGatewayVPC"):                           "0.0500000000",
+		Key("AmazonRoute53", "HostedZone", ""):                                                  "0.5000000000",
+		Key("awskms", "KMS-Keys", ""):                                                           "1.0000000000",
+		Key("AmazonS3", "TimedStorage-ByteHrs", ""):                                             "0.0230000000",
+		Key("AmazonEC2", "EBS:VolumeP-IOPS.gp3", ""):                                            "0.0050000000",
+		Key("AmazonEC2", "EBS:VolumeP-Throughput.gp3", ""):                                      "40.9600000000",
+		Key("AmazonEKS", "AmazonEKS-Hours:perCluster", "CreateOperation"):                       "0.1000000000",
+		Key("AmazonEKS", "AmazonEKS-Hours:extendedSupport", "ExtendedSupport"):                  "0.5000000000",
+		Key("AmazonEKS", "EKS-Auto:c6a.xlarge-management-hours", "EKSAutoUsage"):                "0.0183600000",
+		Key("AmazonEKS", "AmazonEKS-Hours:XL-ProvisionedTier", "ProvisionedControlPlaneUsage"):  "1.6500000000",
+		Key("AmazonEKS", "AmazonEKS-Hours:8XL-ProvisionedTier", "ProvisionedControlPlaneUsage"): "13.9000000000",
+		Key("AWSSecretsManager", "AWSSecretsManager-Secrets", ""):                               "0.4000000000",
 	}
 	for k, usd := range want {
 		if got := snap.Prices[k].USD; got != usd {
@@ -58,8 +61,8 @@ func TestRefreshFiltersOnDemandLinuxShared(t *testing.T) {
 	if eks := snap.Prices[Key("AmazonEKS", "AmazonEKS-Hours:perCluster", "CreateOperation")]; eks.UsageType != "USE1-AmazonEKS-Hours:perCluster" {
 		t.Errorf("eks usage type %q", eks.UsageType)
 	}
-	// The newest offer file of the mirror is AmazonEKS 20261111153557.
-	if snap.AsOf != "2026-11-11T15:35:57Z" {
+	// The newest offer file of the mirror is AWSSecretsManager 20261111195606.
+	if snap.AsOf != "2026-11-11T19:56:06Z" {
 		t.Errorf("as_of = %s", snap.AsOf)
 	}
 	data, err := snap.Encode()
@@ -226,10 +229,12 @@ func TestRefreshKeepsBillingFieldsAndTiers(t *testing.T) {
 func TestNormalizeUsageType(t *testing.T) {
 	p, _ := regionPrefixes("us-east-1")
 	cases := map[string]string{
-		"USE1-VpcEndpoint-Hours": "VpcEndpoint-Hours",
-		"us-east-1-KMS-Keys":     "KMS-Keys",
-		"NatGateway-Hours":       "NatGateway-Hours",
-		"USE2-NatGateway-Hours":  "USE2-NatGateway-Hours",
+		"USE1-VpcEndpoint-Hours":         "VpcEndpoint-Hours",
+		"USE1-AWSSecretsManager-Secret":  "AWSSecretsManager-Secrets",
+		"USE1-AWSSecretsManager-Secrets": "AWSSecretsManager-Secrets",
+		"us-east-1-KMS-Keys":             "KMS-Keys",
+		"NatGateway-Hours":               "NatGateway-Hours",
+		"USE2-NatGateway-Hours":          "USE2-NatGateway-Hours",
 	}
 	for in, want := range cases {
 		if got := normalizeUsageType(in, p); got != want {

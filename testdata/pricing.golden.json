@@ -2,8 +2,8 @@
   "schema_version": 2,
   "region": "us-east-1",
   "currency": "USD",
-  "as_of": "2026-11-11T15:35:57Z",
-  "sha256": "15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744",
+  "as_of": "2026-11-11T19:56:06Z",
+  "sha256": "c2ef4ad3277674058fb633619219ec0d5a25388cb0eb31ca088eed69d65e7c30",
   "sources": [
     {
       "service": "AWSCertificateManager",
@@ -18,6 +18,13 @@
       "version": "20261102172009",
       "publication_date": "2026-11-02T17:20:09Z",
       "path": "/offers/v1.0/aws/AWSCloudTrail/20261102172009/us-east-1/index.csv"
+    },
+    {
+      "service": "AWSSecretsManager",
+      "scope": "region",
+      "version": "20261111195606",
+      "publication_date": "2026-11-11T19:56:06Z",
+      "path": "/offers/v1.0/aws/AWSSecretsManager/20261111195606/us-east-1/index.csv"
     },
     {
       "service": "AmazonEC2",
@@ -98,6 +105,16 @@
       "rate_code": "HSTGM6MX75VC7UUF.JRTCKXETXF.6YS6EN2CT7",
       "usage_type": "USE1-PaidEventsRecorded",
       "service_name": "AWS CloudTrail",
+      "location": "US East (N. Virginia)"
+    },
+    "AWSSecretsManager|AWSSecretsManager-Secrets|": {
+      "sku": "BJ3PQ9BYGU6P632F",
+      "unit": "Secrets",
+      "usd": "0.4000000000",
+      "description": "$0.40 per Secret",
+      "rate_code": "BJ3PQ9BYGU6P632F.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-AWSSecretsManager-Secrets",
+      "service_name": "AWS Secrets Manager",
       "location": "US East (N. Virginia)"
     },
     "AmazonEC2|BoxUsage:m7g.large|RunInstances": {
@@ -238,6 +255,46 @@
       "rate_code": "M2YSHUBETB3JX4M4.JRTCKXETXF.6YS6EN2CT7",
       "usage_type": "NatGateway-Hours",
       "service_name": "Amazon Elastic Compute Cloud",
+      "location": "US East (N. Virginia)"
+    },
+    "AmazonEKS|AmazonEKS-Hours:2XL-ProvisionedTier|ProvisionedControlPlaneUsage": {
+      "sku": "ZFR5JCZGFAZC95YM",
+      "unit": "Hours",
+      "usd": "3.4000000000",
+      "description": "$3.40 per Hour for 2XL Provisioned Tier in US East (N. Virginia)",
+      "rate_code": "ZFR5JCZGFAZC95YM.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-AmazonEKS-Hours:2XL-ProvisionedTier",
+      "service_name": "Amazon Elastic Container Service for Kubernetes",
+      "location": "US East (N. Virginia)"
+    },
+    "AmazonEKS|AmazonEKS-Hours:4XL-ProvisionedTier|ProvisionedControlPlaneUsage": {
+      "sku": "C372WXFJQCBP6VQQ",
+      "unit": "Hours",
+      "usd": "6.9000000000",
+      "description": "$6.90 per Hour for 4XL Provisioned Tier in US East (N. Virginia)",
+      "rate_code": "C372WXFJQCBP6VQQ.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-AmazonEKS-Hours:4XL-ProvisionedTier",
+      "service_name": "Amazon Elastic Container Service for Kubernetes",
+      "location": "US East (N. Virginia)"
+    },
+    "AmazonEKS|AmazonEKS-Hours:8XL-ProvisionedTier|ProvisionedControlPlaneUsage": {
+      "sku": "UA6ESUEN2MWPRK3W",
+      "unit": "Hours",
+      "usd": "13.9000000000",
+      "description": "$13.90 per Hour for 8XL Provisioned Tier in US East (N. Virginia)",
+      "rate_code": "UA6ESUEN2MWPRK3W.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-AmazonEKS-Hours:8XL-ProvisionedTier",
+      "service_name": "Amazon Elastic Container Service for Kubernetes",
+      "location": "US East (N. Virginia)"
+    },
+    "AmazonEKS|AmazonEKS-Hours:XL-ProvisionedTier|ProvisionedControlPlaneUsage": {
+      "sku": "9QKTB9ZKX2FUW58V",
+      "unit": "Hours",
+      "usd": "1.6500000000",
+      "description": "$1.65 per Hour for XL Provisioned Tier in US East (N. Virginia)",
+      "rate_code": "9QKTB9ZKX2FUW58V.JRTCKXETXF.6YS6EN2CT7",
+      "usage_type": "USE1-AmazonEKS-Hours:XL-ProvisionedTier",
+      "service_name": "Amazon Elastic Container Service for Kubernetes",
       "location": "US East (N. Virginia)"
     },
     "AmazonEKS|AmazonEKS-Hours:extendedSupport|ExtendedSupport": {

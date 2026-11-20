@@ -1,0 +1,105 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.13.4",
+  "resource_changes": [
+    {
+      "address": "aws_eks_cluster.main",
+      "mode": "managed",
+      "type": "aws_eks_cluster",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["update"],
+        "before": {"name": "main", "control_plane_scaling_config": [{"tier": "standard"}], "compute_config": []},
+        "after": {"name": "main", "control_plane_scaling_config": [{"tier": "tier-2xl"}], "compute_config": []},
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "aws_eks_node_group.general",
+      "mode": "managed",
+      "type": "aws_eks_node_group",
+      "name": "general",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "cluster_name": "main",
+          "ami_type": "AL2023_ARM_64_STANDARD",
+          "capacity_type": "ON_DEMAND",
+          "instance_types": ["m7g.large", "m6g.large"],
+          "disk_size": 50,
+          "launch_template": [],
+          "scaling_config": [{"desired_size": 3, "max_size": 6, "min_size": 2}]
+        },
+        "after_unknown": {"arn": true, "id": true, "resources": true}
+      }
+    },
+    {
+      "address": "aws_eks_node_group.batch",
+      "mode": "managed",
+      "type": "aws_eks_node_group",
+      "name": "batch",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "cluster_name": "main",
+          "ami_type": "BOTTLEROCKET_ARM_64",
+          "capacity_type": "SPOT",
+          "instance_types": ["t4g.micro"],
+          "launch_template": [],
+          "scaling_config": [{"desired_size": 2, "max_size": 10, "min_size": 0}]
+        },
+        "after_unknown": {"arn": true, "id": true, "resources": true}
+      }
+    },
+    {
+      "address": "aws_eks_node_group.windows",
+      "mode": "managed",
+      "type": "aws_eks_node_group",
+      "name": "windows",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "cluster_name": "main",
+          "ami_type": "WINDOWS_CORE_2022_x86_64",
+          "instance_types": ["m5.large"],
+          "launch_template": [],
+          "scaling_config": [{"desired_size": 1, "max_size": 1, "min_size": 1}]
+        },
+        "after_unknown": {"arn": true, "id": true}
+      }
+    },
+    {
+      "address": "aws_secretsmanager_secret.db",
+      "mode": "managed",
+      "type": "aws_secretsmanager_secret",
+      "name": "db",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"name": "app/db", "replica": [{"region": "us-west-2"}]},
+        "after_unknown": {"arn": true, "id": true}
+      }
+    },
+    {
+      "address": "aws_secretsmanager_secret_version.db",
+      "mode": "managed",
+      "type": "aws_secretsmanager_secret_version",
+      "name": "db",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"secret_string": null},
+        "after_unknown": {"arn": true, "id": true, "secret_id": true}
+      }
+    }
+  ]
+}

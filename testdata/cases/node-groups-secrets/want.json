@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "tool": "costgate",
+  "version": "test",
+  "region": "us-east-1",
+  "currency": "USD",
+  "pricing": {
+    "as_of": "2026-11-11T19:56:06Z",
+    "sha256": "c2ef4ad3277674058fb633619219ec0d5a25388cb0eb31ca088eed69d65e7c30",
+    "sources": [
+      {
+        "service": "AWSCertificateManager",
+        "scope": "region",
+        "version": "20261022154217",
+        "publication_date": "2026-10-22T15:42:17Z",
+        "path": "/offers/v1.0/aws/AWSCertificateManager/20261022154217/us-east-1/index.csv"
+      },
+      {
+        "service": "AWSCloudTrail",
+        "scope": "region",
+        "version": "20261102172009",
+        "publication_date": "2026-11-02T17:20:09Z",
+        "path": "/offers/v1.0/aws/AWSCloudTrail/20261102172009/us-east-1/index.csv"
+      },
+      {
+        "service": "AWSSecretsManager",
+        "scope": "region",
+        "version": "20261111195606",
+        "publication_date": "2026-11-11T19:56:06Z",
+        "path": "/offers/v1.0/aws/AWSSecretsManager/20261111195606/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonEC2",
+        "scope": "region",
+        "version": "20261029175634",
+        "publication_date": "2026-10-29T17:56:34Z",
+        "path": "/offers/v1.0/aws/AmazonEC2/20261029175634/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonEKS",
+        "scope": "region",
+        "version": "20261111153557",
+        "publication_date": "2026-11-11T15:35:57Z",
+        "path": "/offers/v1.0/aws/AmazonEKS/20261111153557/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonRoute53",
+        "scope": "global",
+        "version": "20260911124504",
+        "publication_date": "2026-09-11T12:45:04Z",
+        "path": "/offers/v1.0/aws/AmazonRoute53/current/index.csv"
+      },
+      {
+        "service": "AmazonRoute53",
+        "scope": "region",
+        "version": "20260911124504",
+        "publication_date": "2026-09-11T12:45:04Z",
+        "path": "/offers/v1.0/aws/AmazonRoute53/20260911124504/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonS3",
+        "scope": "region",
+        "version": "20261015173540",
+        "publication_date": "2026-10-15T17:35:40Z",
+        "path": "/offers/v1.0/aws/AmazonS3/20261015173540/us-east-1/index.csv"
+      },
+      {
+        "service": "AmazonVPC",
+        "scope": "region",
+        "version": "20261103000947",
+        "publication_date": "2026-11-03T00:09:47Z",
+        "path": "/offers/v1.0/aws/AmazonVPC/20261103000947/us-east-1/index.csv"
+      },
+      {
+        "service": "awskms",
+        "scope": "region",
+        "version": "20261026201814",
+        "publication_date": "2026-10-26T20:18:14Z",
+        "path": "/offers/v1.0/aws/awskms/20261026201814/us-east-1/index.csv"
+      }
+    ]
+  },
+  "snapshots": [
+    {
+      "region": "us-east-1",
+      "as_of": "2026-11-11T19:56:06Z",
+      "sha256": "c2ef4ad3277674058fb633619219ec0d5a25388cb0eb31ca088eed69d65e7c30",
+      "resources": 5
+    }
+  ],
+  "totals": {
+    "monthly_before": 73.0000,
+    "monthly_after": 2758.4096,
+    "monthly_delta": 2685.4096
+  },
+  "ceilings": {
+    "max_monthly_delta": 3000.0000,
+    "max_monthly_total": null
+  },
+  "status": "unpriced",
+  "exit_code": 2,
+  "reasons": [
+    "1 resource created or changed has no known price"
+  ],
+  "incomplete": true,
+  "resources": [
+    {
+      "address": "aws_eks_cluster.main",
+      "type": "aws_eks_cluster",
+      "action": "update",
+      "zero_cost": false,
+      "before": {
+        "monthly": 73.0000,
+        "lines": [
+          {
+            "name": "cluster control plane, standard support",
+            "price_key": "AmazonEKS|AmazonEKS-Hours:perCluster|CreateOperation",
+            "sku": "ZYWMR684YSMFHWEU",
+            "usage_type": "USE1-AmazonEKS-Hours:perCluster",
+            "rate_code": "ZYWMR684YSMFHWEU.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "Amazon EKS cluster usage in US East (N. Virginia)",
+            "billing_rule": "fixed_hourly",
+            "unit_price": 0.1,
+            "quantity": 730,
+            "unit": "h",
+            "monthly": 73.0000,
+            "declared": true,
+            "note": "extended support not included; declare extended_support_hours for a version in extended support"
+          }
+        ]
+      },
+      "after": {
+        "monthly": 2555.0000,
+        "lines": [
+          {
+            "name": "cluster control plane, standard support",
+            "price_key": "AmazonEKS|AmazonEKS-Hours:perCluster|CreateOperation",
+            "sku": "ZYWMR684YSMFHWEU",
+            "usage_type": "USE1-AmazonEKS-Hours:perCluster",
+            "rate_code": "ZYWMR684YSMFHWEU.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "Amazon EKS cluster usage in US East (N. Virginia)",
+            "billing_rule": "fixed_hourly",
+            "unit_price": 0.1,
+            "quantity": 730,
+            "unit": "h",
+            "monthly": 73.0000,
+            "declared": true,
+            "note": "extended support not included; declare extended_support_hours for a version in extended support"
+          },
+          {
+            "name": "provisioned control plane, tier-2xl",
+            "price_key": "AmazonEKS|AmazonEKS-Hours:2XL-ProvisionedTier|ProvisionedControlPlaneUsage",
+            "sku": "ZFR5JCZGFAZC95YM",
+            "usage_type": "USE1-AmazonEKS-Hours:2XL-ProvisionedTier",
+            "rate_code": "ZFR5JCZGFAZC95YM.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$3.40 per Hour for 2XL Provisioned Tier in US East (N. Virginia)",
+            "billing_rule": "fixed_hourly",
+            "unit_price": 3.4,
+            "quantity": 730,
+            "unit": "h",
+            "monthly": 2482.0000,
+            "declared": true,
+            "note": "billed on top of the control plane hour"
+          }
+        ]
+      },
+      "delta": 2482.0000,
+      "blocking": false,
+      "region": "us-east-1",
+      "region_assumed": true
+    },
+    {
+      "address": "aws_eks_node_group.batch",
+      "type": "aws_eks_node_group",
+      "action": "create",
+      "zero_cost": false,
+      "before": null,
+      "after": {
+        "monthly": 8.9056,
+        "lines": [
+          {
+            "name": "compute Spot, Linux t4g.micro",
+            "price_key": "AmazonEC2|BoxUsage:t4g.micro|RunInstances",
+            "sku": "6U8TKDT6A9WNJNP5",
+            "usage_type": "BoxUsage:t4g.micro",
+            "rate_code": "6U8TKDT6A9WNJNP5.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.0084 per On Demand Linux t4g.micro Instance Hour",
+            "billing_rule": "usage",
+            "unit_price": 0.0084,
+            "quantity": 1460,
+            "unit": "h",
+            "factor": 0.4,
+            "monthly": 4.9056,
+            "premise": "spot_discount",
+            "declared": true,
+            "note": "2 nodes from scaling_config.desired_size, which an autoscaler changes after apply; on-demand × (1 − spot_discount 0.6)"
+          },
+          {
+            "name": "node disks (gp2)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp2|",
+            "sku": "HY3BZPP2B6K8MSJF",
+            "usage_type": "EBS:VolumeUsage.gp2",
+            "rate_code": "HY3BZPP2B6K8MSJF.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.10 per GB-month of General Purpose SSD (gp2) provisioned storage - US East (Northern Virginia)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 0.1,
+            "quantity": 40,
+            "unit": "GB-month",
+            "monthly": 4.0000,
+            "declared": true,
+            "note": "20 GB × 2 nodes; disk_size not set: EKS default 20 GB; gp2, the volume type of the launch template EKS creates"
+          }
+        ]
+      },
+      "delta": 8.9056,
+      "blocking": false,
+      "region": "us-east-1",
+      "region_assumed": true
+    },
+    {
+      "address": "aws_eks_node_group.general",
+      "type": "aws_eks_node_group",
+      "action": "create",
+      "zero_cost": false,
+      "before": null,
+      "after": {
+        "monthly": 193.7040,
+        "lines": [
+          {
+            "name": "compute on-demand, Linux m7g.large",
+            "price_key": "AmazonEC2|BoxUsage:m7g.large|RunInstances",
+            "sku": "Y4JWUCG93UEP6MPT",
+            "usage_type": "BoxUsage:m7g.large",
+            "rate_code": "Y4JWUCG93UEP6MPT.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.0816 per On Demand Linux m7g.large Instance Hour",
+            "billing_rule": "fixed_hourly",
+            "unit_price": 0.0816,
+            "quantity": 2190,
+            "unit": "h",
+            "monthly": 178.7040,
+            "declared": true,
+            "note": "first of 2 instance_types; 3 nodes from scaling_config.desired_size, which an autoscaler changes after apply"
+          },
+          {
+            "name": "node disks (gp2)",
+            "price_key": "AmazonEC2|EBS:VolumeUsage.gp2|",
+            "sku": "HY3BZPP2B6K8MSJF",
+            "usage_type": "EBS:VolumeUsage.gp2",
+            "rate_code": "HY3BZPP2B6K8MSJF.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.10 per GB-month of General Purpose SSD (gp2) provisioned storage - US East (Northern Virginia)",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 0.1,
+            "quantity": 150,
+            "unit": "GB-month",
+            "monthly": 15.0000,
+            "declared": true,
+            "note": "50 GB × 3 nodes; gp2, the volume type of the launch template EKS creates"
+          }
+        ]
+      },
+      "delta": 193.7040,
+      "blocking": false,
+      "region": "us-east-1",
+      "region_assumed": true
+    },
+    {
+      "address": "aws_eks_node_group.windows",
+      "type": "aws_eks_node_group",
+      "action": "create",
+      "zero_cost": false,
+      "before": null,
+      "after": {
+        "monthly": 0.0000,
+        "unpriced": "ami_type \"WINDOWS_CORE_2022_x86_64\" is not modeled (only Amazon Linux and Bottlerocket)",
+        "unpriced_reason": "config",
+        "lines": []
+      },
+      "delta": 0.0000,
+      "blocking": true,
+      "region": "us-east-1",
+      "region_assumed": true
+    },
+    {
+      "address": "aws_secretsmanager_secret.db",
+      "type": "aws_secretsmanager_secret",
+      "action": "create",
+      "zero_cost": false,
+      "before": null,
+      "after": {
+        "monthly": 0.8000,
+        "lines": [
+          {
+            "name": "secret",
+            "price_key": "AWSSecretsManager|AWSSecretsManager-Secrets|",
+            "sku": "BJ3PQ9BYGU6P632F",
+            "usage_type": "USE1-AWSSecretsManager-Secrets",
+            "rate_code": "BJ3PQ9BYGU6P632F.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.40 per Secret",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 0.4,
+            "quantity": 1,
+            "unit": "secret-month",
+            "monthly": 0.4000,
+            "declared": true,
+            "note": "API requests not priced"
+          },
+          {
+            "name": "replica secrets",
+            "price_key": "AWSSecretsManager|AWSSecretsManager-Secrets|",
+            "sku": "BJ3PQ9BYGU6P632F",
+            "usage_type": "USE1-AWSSecretsManager-Secrets",
+            "rate_code": "BJ3PQ9BYGU6P632F.JRTCKXETXF.6YS6EN2CT7",
+            "billing_description": "$0.40 per Secret",
+            "billing_rule": "fixed_monthly",
+            "unit_price": 0.4,
+            "quantity": 1,
+            "unit": "secret-month",
+            "monthly": 0.4000,
+            "declared": true,
+            "note": "at the price of the primary region; each replica is billed in its region"
+          }
+        ]
+      },
+      "delta": 0.8000,
+      "blocking": false,
+      "region": "us-east-1",
+      "region_assumed": true
+    },
+    {
+      "address": "aws_secretsmanager_secret_version.db",
+      "type": "aws_secretsmanager_secret_version",
+      "action": "create",
+      "zero_cost": true,
+      "before": null,
+      "after": {
+        "monthly": 0.0000,
+        "lines": []
+      },
+      "delta": 0.0000,
+      "blocking": false,
+      "region": "us-east-1",
+      "region_assumed": true
+    }
+  ],
+  "usage_not_declared": []
+}

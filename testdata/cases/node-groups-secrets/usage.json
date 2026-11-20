@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "resources": {
+    "aws_eks_node_group.batch": {"spot_discount": 0.6}
+  }
+}

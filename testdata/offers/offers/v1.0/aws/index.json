@@ -41,6 +41,11 @@
    "offerCode": "AmazonEKS",
    "currentVersionUrl": "/offers/v1.0/aws/AmazonEKS/current/index.json",
    "currentRegionIndexUrl": "/offers/v1.0/aws/AmazonEKS/current/region_index.json"
+  },
+  "AWSSecretsManager": {
+   "offerCode": "AWSSecretsManager",
+   "currentVersionUrl": "/offers/v1.0/aws/AWSSecretsManager/current/index.json",
+   "currentRegionIndexUrl": "/offers/v1.0/aws/AWSSecretsManager/current/region_index.json"
   }
  }
 }

@@ -13,8 +13,8 @@
 
 | Resource | Action | Before | After | Delta | Breakdown |
 |---|---|---:|---:|---:|---|
-| `aws_eks_cluster.batch` | update | 73.00 | 103.38 | +30.38 | cluster control plane, standard support: 730 h × $0.1 = 73.00 (extended support not included; declare extended_support_hours for a version in extended support)<br>EKS Auto Mode management fee, c6a.xlarge: 1460 h × $0.01836 = 26.81 (EC2 cost of the nodes not included)<br>EKS Auto Mode management fee, m7g.large: 365 h × $0.00979 = 3.57 (EC2 cost of the nodes not included) |
-| `module.eks.aws_eks_cluster.this[0]` | create | – | 73.00 | +73.00 | cluster control plane, standard support: 730 h × $0.1 = 73.00 (extended support not included; declare extended_support_hours for a version in extended support)<br>EKS Auto Mode management fee: usage not declared (`auto_mode_instance_hours`) |
+| `aws_eks_cluster.batch` | update | 73.00 | 103.38 | +30.38 | cluster control plane, standard support: 730 h × $0.1 = 73.00 (standard tier: the plan has no control_plane_scaling_config; extended support not included; declare extended_support_hours for a version in extended support)<br>EKS Auto Mode management fee, c6a.xlarge: 1460 h × $0.01836 = 26.81 (EC2 cost of the nodes not included)<br>EKS Auto Mode management fee, m7g.large: 365 h × $0.00979 = 3.57 (EC2 cost of the nodes not included) |
+| `module.eks.aws_eks_cluster.this[0]` | create | – | 73.00 | +73.00 | cluster control plane, standard support: 730 h × $0.1 = 73.00 (standard tier: the plan has no control_plane_scaling_config; extended support not included; declare extended_support_hours for a version in extended support)<br>EKS Auto Mode management fee: usage not declared (`auto_mode_instance_hours`) |
 
 <details><summary>Billing keys of 5 cost lines (SKU and invoice description)</summary>
 
@@ -40,4 +40,4 @@
 
 </details>
 
-<sub>costgate test · AWS Price List Bulk API snapshot `us-east-1` as of 2026-11-11T15:35:57Z (sha256 `15582beb60a1`) · on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included.</sub>
+<sub>costgate test · AWS Price List Bulk API snapshot `us-east-1` as of 2026-11-11T19:56:06Z (sha256 `c2ef4ad32776`) · on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included.</sub>

@@ -1,0 +1,8 @@
+"FormatVersion","v1.0"
+"Disclaimer","This pricing list is for informational purposes only. All prices are subject to the additional terms included in the pricing pages on http://aws.amazon.com. All Free Tier prices are also subject to the terms included at https://aws.amazon.com/free/"
+"Publication Date","2026-11-11T19:56:06Z"
+"Version","20261111195606"
+"OfferCode","AWSSecretsManager"
+"SKU","OfferTermCode","RateCode","TermType","PriceDescription","EffectiveDate","StartingRange","EndingRange","Unit","PricePerUnit","Currency","Product Family","serviceCode","Location","Location Type","Group","usageType","operation","Region Code","serviceName"
+"4MDZ5VNEJPMUTG9B","JRTCKXETXF","4MDZ5VNEJPMUTG9B.JRTCKXETXF.6YS6EN2CT7","OnDemand","$0.05 per 10000 API Requests","2026-11-01","0","Inf","API Requests","0.0000050000","USD","API Request","AWSSecretsManager","US East (N. Virginia)","AWS Region","AWSSecretsManager-APIRequest","USE1-AWSSecretsManagerAPIRequest","","us-east-1","AWS Secrets Manager"
+"BJ3PQ9BYGU6P632F","JRTCKXETXF","BJ3PQ9BYGU6P632F.JRTCKXETXF.6YS6EN2CT7","OnDemand","$0.40 per Secret","2026-11-01","0","Inf","Secrets","0.4000000000","USD","Secret","AWSSecretsManager","US East (N. Virginia)","AWS Region","AWSSecretsManager-Secret","USE1-AWSSecretsManager-Secrets","","us-east-1","AWS Secrets Manager"
