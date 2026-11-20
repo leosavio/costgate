@@ -18,7 +18,7 @@ tags: [agents, aws, cost, terraform]
 
 CLI em Go, MIT, repo público `leosavio/costgate`: lê `terraform show -json` de um plan, calcula o
 custo mensal antes × depois por recurso com preços de um snapshot embutido da AWS Price List
-Bulk API e devolve Markdown/JSON + exit code para gate de PR. Primeiro consumidor:
+Bulk API e devolve Markdown/JSON + exit code para gate de PR (HTML autocontido opcional). Primeiro consumidor:
 `leosavio/foundation-org-leo-plan` (substitui o Infracost previsto na ADR-011 dele).
 
 ## Stack e arquitetura
@@ -30,7 +30,7 @@ Bulk API e devolve Markdown/JSON + exit code para gate de PR. Primeiro consumido
 | `internal/usage` | premissas JSON `schema_version` 1 | precedência resources > types > defaults > embutido; EKS: `extended_support_hours`, `auto_mode_instance_hours` |
 | `internal/catalog` | snapshot `schema_version` 2 + `pricing refresh` (CSV em streaming) | regras de SKU em `rules.go`; `sha256` verificado no load; lê v1 e v2 |
 | `internal/estimate` | fórmulas por tipo + lista de custo zero + região por recurso (`region.go`) | `resources.go`; valores em `math/big.Rat`; motivo de não precificado (`provider`/`type`/`region`/`config`/`price`) |
-| `internal/report` | gate (exit 0/1/2/3), Markdown com marcador, JSON `schema_version` 1, JSON Lines | chaves da fatura por linha; `warnings` (`region_mismatch`) e `ignored` só quando se aplicam |
+| `internal/report` | gate (exit 0/1/2/3), Markdown com marcador, JSON `schema_version` 1, JSON Lines, HTML (`--html-out`) | chaves da fatura por linha (`sku`, `usage_type`, `rate_code`, `billing_description`, `billing_rule`); `warnings` (`region_mismatch`) e `ignored` só quando se aplicam; HTML = `assets/` via `go:embed`, embute o relatório JSON + `view` com valores formatados em Go |
 | `pricing/us-east-1.json`, `pricing/us-west-2.json` | snapshots embutidos (`go:embed *.json`) | 2684 e 2648 preços, as of 2026-11-20 (inclui 1261/1244 taxas do EKS Auto Mode) |
 | `scripts/pricing-diff.sh` | sh + `jq` | compara só o mapa `prices` com um ref; exit 0 igual, 1 mudou (usado pelo `refresh-pricing.yml`) |
 | `site/` | landing estática (Cloudflare Pages, stack `site-cdn-dns-central/cf-pages/costgate-site`) | `ping.js`: 1 evento por aba, sem cookie, filtros de robô; só a página mede |
@@ -39,7 +39,19 @@ Bulk API e devolve Markdown/JSON + exit code para gate de PR. Primeiro consumido
 
 ## Estado atual (onde parei)
 
-> Última atualização: 2026-11-20 (7ª sessão, sem commit: mudanças na branch `feat/workshop-findings`)
+> Última atualização: 2026-11-20 (8ª sessão, relatório HTML, branch `feat/html-report`)
+
+8ª sessão: relatório HTML (P7 da avaliação no workshop Spark on EKS,
+`aws-spark-on-eks-workshop/extra-02-avaliacao-ferramentas/kubecost-costgate-insights.md` Parte 1.4):
+`costgate diff --html-out <arquivo>` grava uma página autocontida, sem mudar Markdown, JSON, JSON
+Lines nem exit code. Dados = relatório JSON da execução (`json.Marshal`) + `view` calculada em Go
+com `big.Rat` (valores formatados, barras por módulo e tipo, não precificados por motivo,
+premissas, região, avisos, recursos de providers ignorados, documentos de exportação); o JS não faz
+conta com dinheiro e só usa `textContent`. CSP `default-src 'none'` com sha256 do script e do
+estilo. Goldens `want.html` em todos os casos (caso `escape` com `</script><img …>` em endereço,
+provider e instance type); `bash scripts/html-check.sh` abre cada golden no Chrome headless e exige
+`data-status="ok"`. Captura `docs/images/html-report.png` gerada pelo mesmo script (`screenshot`).
+Não precificado agrupado pelo `unpriced_reason` da lane 2. Sem release.
 
 7ª sessão (achados da avaliação no workshop AWS Spark on EKS, propostas P1, P5, P6, P2 e P3 de
 `aws-spark-on-eks-workshop/extra-02-avaliacao-ferramentas/kubecost-costgate-insights.md`):
@@ -114,6 +126,8 @@ Operador confirmou D4/D5 da ADR-001. Integração com o foundation **só documen
 go vet ./... && ~/go/bin/staticcheck ./... && go test -race -count=1 ./...
 go test ./internal/cli -update                       # regrava goldens; revisar diff
 GOARCH=amd64 go test ./...                           # determinismo cross-arch (Rosetta)
+bash scripts/html-check.sh                           # goldens HTML no Chrome headless (data-status="ok")
+bash scripts/html-check.sh screenshot docs/images/html-report.png baseline 'open=aws_acmpca_certificate_authority.internal'
 go run ./cmd/costgate pricing refresh                # baixa a Bulk API pública (~19 s), grava pricing/us-east-1.json
 go run ./cmd/costgate pricing refresh --region us-west-2 --out pricing/us-west-2.json
 go run ./cmd/costgate pricing verify                 # confere todos os snapshots embutidos
@@ -129,7 +143,8 @@ sh scripts/homebrew-formula.sh X.Y.Z checksums.txt    # fórmula manual (fallbac
 |---|---|
 | ADRs | docs/adr/ |
 | Integração de CI (consumidor) | docs/integration/github-actions.md |
-| Funcionamento interno (diagramas) | docs/how-it-works.md |
+| Funcionamento interno (diagramas) | docs/how-it-works.md (inclui "The HTML report") |
+| Página do relatório HTML | internal/report/assets/ (page.html, page.css, page.js) · internal/report/html.go |
 | Comparação com o Infracost (datada, com fontes) | docs/comparison.md |
 | Mapa recurso → SKU | internal/catalog/rules.go · internal/estimate/resources.go · README.md §Recursos cobertos |
 | Tech debt | docs/tech-debt.md (a criar no primeiro débito) |

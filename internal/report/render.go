@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 
 	"github.com/leosavio/costgate/internal/catalog"
@@ -139,16 +140,14 @@ func Markdown(in Input) string {
 	w("| Total | %s | %s | **%s** |\n\n", usd(res.Before), usd(res.After), money.Signed(res.Delta, 2))
 
 	w("| Check | Limit | Result |\n|---|---:|---|\n")
-	if in.Ceilings.MaxDelta != nil {
-		ok := res.Delta.Cmp(in.Ceilings.MaxDelta) <= 0
-		w("| `--max-monthly-delta` | %s | %s |\n", usd(in.Ceilings.MaxDelta), pass(ok, money.Signed(res.Delta, 2)))
+	for _, c := range checks(in) {
+		name := c.Name
+		if c.Flag {
+			name = "`" + name + "`"
+		}
+		w("| %s | %s | %s |\n", name, c.Limit, pass(c.OK, c.Value))
 	}
-	if in.Ceilings.MaxTotal != nil {
-		ok := res.After.Cmp(in.Ceilings.MaxTotal) <= 0 && !res.Incomplete()
-		w("| `--max-monthly-total` | %s | %s |\n", usd(in.Ceilings.MaxTotal), pass(ok, usd(res.After)))
-	}
-	blocking := res.Blocking()
-	w("| Unpriced resources created or changed | 0 | %s |\n\n", pass(len(blocking) == 0, fmt.Sprint(len(blocking))))
+	w("\n")
 	if len(v.Reasons) > 0 {
 		w("**Exit %d:** %s.\n\n", v.ExitCode, strings.Join(v.Reasons, "; "))
 	}
@@ -231,17 +230,40 @@ func Markdown(in Input) string {
 	}
 
 	p := in.Pricing
-	short := p.SHA256
-	if len(short) > 12 {
-		short = short[:12]
-	}
 	ignored := ""
 	if len(res.IgnoredProviders) > 0 {
 		ignored = fmt.Sprintf(" · `--ignore-provider %s`: %s left out of the gate", strings.Join(res.IgnoredProviders, ","), plural(len(res.Ignored), "resource", "resources"))
 	}
-	w("<sub>costgate %s · AWS Price List Bulk API snapshot `%s` as of %s (sha256 `%s`)%s · on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included.</sub>\n",
-		in.Version, p.Region, p.AsOf, short, ignored)
+	w("<sub>costgate %s · AWS Price List Bulk API snapshot `%s` as of %s (sha256 `%s`)%s · %s</sub>\n",
+		in.Version, p.Region, p.AsOf, shortSHA(p.SHA256), ignored, disclaimer)
 	return b.String()
+}
+
+// disclaimer is the scope of the prices, in the footer of every report.
+const disclaimer = "on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included."
+
+// check is one row of the checks table of the reports.
+type check struct {
+	Name  string `json:"name"`
+	Flag  bool   `json:"flag"` // Name is a command line flag
+	Limit string `json:"limit"`
+	Value string `json:"value"`
+	OK    bool   `json:"ok"`
+}
+
+func checks(in Input) []check {
+	res, c := in.Result, in.Ceilings
+	var out []check
+	if c.MaxDelta != nil {
+		out = append(out, check{Name: "--max-monthly-delta", Flag: true, Limit: usd(c.MaxDelta),
+			Value: money.Signed(res.Delta, 2), OK: res.Delta.Cmp(c.MaxDelta) <= 0})
+	}
+	if c.MaxTotal != nil {
+		out = append(out, check{Name: "--max-monthly-total", Flag: true, Limit: usd(c.MaxTotal),
+			Value: usd(res.After), OK: res.After.Cmp(c.MaxTotal) <= 0 && !res.Incomplete()})
+	}
+	n := len(res.Blocking())
+	return append(out, check{Name: "Unpriced resources created or changed", Limit: "0", Value: strconv.Itoa(n), OK: n == 0})
 }
 
 // billingDetails lists, in a collapsed block, the bill keys of the lines in
@@ -411,6 +433,19 @@ func toJSONSide(s estimate.Side) *jsonSide {
 
 // JSON renders the machine-readable report with a trailing newline.
 func JSON(in Input) ([]byte, error) {
+	r := buildReport(in)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(r); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// buildReport is the JSON report; the HTML page embeds the same value.
+func buildReport(in Input) jsonReport {
 	res := in.Result
 	var r jsonReport
 	r.SchemaVersion, r.Tool, r.Version = JSONSchemaVersion, "costgate", in.Version
@@ -440,14 +475,7 @@ func JSON(in Input) ([]byte, error) {
 		ignored := append([]estimate.Ignored{}, res.Ignored...)
 		r.Ignored = &ignored
 	}
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(r); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return r
 }
 
 // Kinds of JSON Lines documents. Cost lines are LineKind; the other kinds
@@ -518,23 +546,13 @@ func JSONLines(in Input) ([]byte, error) {
 		}
 	}
 	for _, r := range in.Result.Resources {
-		for _, sd := range []struct {
-			name string
-			side estimate.Side
-		}{{"before", r.Before}, {"after", r.After}} {
-			if !sd.side.Exists {
-				continue
+		for _, doc := range lineDocs(in, r) {
+			s, err := encodeLineDoc(doc)
+			if err != nil {
+				return nil, err
 			}
-			for _, l := range sd.side.Lines {
-				doc := jsonLineDoc{
-					SchemaVersion: JSONSchemaVersion, Kind: LineKind, Tool: "costgate", Version: in.Version,
-					Region: in.Result.Region, Currency: "USD", PricingAsOf: in.Pricing.AsOf, PricingSHA256: in.Pricing.SHA256,
-					Address: r.Address, Type: r.Type, Action: string(r.Action), Side: sd.name, jsonLine: toJSONLine(l),
-				}
-				if err := enc.Encode(doc); err != nil {
-					return nil, err
-				}
-			}
+			buf.WriteString(s)
+			buf.WriteByte('\n')
 		}
 	}
 	for _, ig := range in.Result.Ignored {
@@ -543,4 +561,37 @@ func JSONLines(in Input) ([]byte, error) {
 		}
 	}
 	return buf.Bytes(), nil
+}
+
+// lineDocs returns the JSON Lines documents of one resource: its cost lines,
+// before side first.
+func lineDocs(in Input, r estimate.Resource) []jsonLineDoc {
+	var out []jsonLineDoc
+	for _, sd := range []struct {
+		name string
+		side estimate.Side
+	}{{"before", r.Before}, {"after", r.After}} {
+		if !sd.side.Exists {
+			continue
+		}
+		for _, l := range sd.side.Lines {
+			out = append(out, jsonLineDoc{
+				SchemaVersion: JSONSchemaVersion, Kind: LineKind, Tool: "costgate", Version: in.Version,
+				Region: in.Result.Region, Currency: "USD", PricingAsOf: in.Pricing.AsOf, PricingSHA256: in.Pricing.SHA256,
+				Address: r.Address, Type: r.Type, Action: string(r.Action), Side: sd.name, jsonLine: toJSONLine(l),
+			})
+		}
+	}
+	return out
+}
+
+// encodeLineDoc is one JSON Lines document without the trailing newline.
+func encodeLineDoc(doc jsonLineDoc) (string, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(doc); err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(buf.String(), "\n"), nil
 }
