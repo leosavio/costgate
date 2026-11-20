@@ -53,8 +53,9 @@ escolheu; `region = var.x` do provider do módulo raiz resolvido por `variables`
 regra sem preço na região (`--strict` para us-east-1). JSON ganhou `snapshots[]` e
 `resources[].region`/`region_assumed`; o JSON Lines usa o snapshot de cada linha. Goldens via
 `Env.Embedded` com fixtures us-east-1 + eu-west-1 (gerado em teste, preços × 1,25, prefixo `EU-`),
-casos novos `multi-region` e `region-variable`. ADR-001 item "Só us-east-1 é versionado" em
-conflito com o estado (registrado em `leosavio-org/knowledge/adr-drift.md`). Sem release.
+casos novos `multi-region` e `region-variable`. ADR-001 item "Só us-east-1 é versionado"
+superado: nota datada de 2026-11-20 no Status da ADR, a pedido do operador (reconciliado em
+`leosavio-org/knowledge/adr-drift.md`). Sem release.
 
 8ª sessão: relatório HTML (P7 da avaliação no workshop Spark on EKS,
 `aws-spark-on-eks-workshop/extra-02-avaliacao-ferramentas/kubecost-costgate-insights.md` Parte 1.4):
