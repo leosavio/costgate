@@ -1,5 +1,5 @@
 <!-- costgate -->
-### costgate: ✅ +US$ 57.92/month
+### costgate: ✅ +US$ 57.92/month · total US$ 61.57/month
 
 > ⚠️ **Warning (`region_assumed`):** 1 resource states no region in the plan (no region attribute, no region in the provider configuration, no ARN yet); priced in us-east-1, the default, because the plan names several regions (eu-west-1, us-east-1).<br>**Fix:** rerun with --region <region> if they deploy elsewhere.
 

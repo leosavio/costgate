@@ -1,5 +1,5 @@
 <!-- costgate -->
-### costgate: ⚠️ US$ 0.00/month · unpriced resources
+### costgate: ⚠️ US$ 0.00/month · total ≥ US$ 0.00/month · unpriced resources
 
 > ⚠️ **Warning (`region_mismatch`):** provider configuration aws deploys to us-west-2, and costgate has no price snapshot of us-west-2; 4 resources in us-west-2 left unpriced (reason region).<br>**Fix:** run 'costgate pricing refresh --region us-west-2 --out us-west-2.json.gz', then rerun with --pricing us-west-2.json.gz.
 

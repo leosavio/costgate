@@ -1,5 +1,5 @@
 <!-- costgate -->
-### costgate: ❌ -US$ 51.70/month · over ceiling
+### costgate: ❌ -US$ 51.70/month · total US$ 21.82/month · over ceiling
 
 | Monthly cost (USD) | Before | After | Delta |
 |---|---:|---:|---:|
