@@ -120,8 +120,8 @@ The script compares against the testdata of the tag you installed:
 git clone -q --depth 1 --branch "v${v}" https://github.com/leosavio/costgate costgate-src && cd costgate-src
 curl -fsSLO https://raw.githubusercontent.com/leosavio/costgate/main/scripts/smoke-check.sh
 sh smoke-check.sh "$(command -v costgate)" "${v}"
-# ok version: costgate 0.2.0
-# ok us-east-1: 1415 prices, ...
+# ok version: costgate 0.3.0
+# ok us-east-1: 2684 prices, ...
 # ok baseline: exit 1, ### costgate: ❌ +US$ 414.16/month · over ceiling
 ```
 
@@ -379,8 +379,7 @@ and `rate_code` are empty strings. An undeclared EKS Auto Mode fee is the one li
 price key: its SKU depends on the instance type the premise names, so `price_key`, `sku`,
 `usage_type`, `rate_code` and `billing_description` are empty and `monthly` is 0.
 
-Fields added after 0.2.0 (unreleased), all absent when they do not apply, so a report without
-them is byte for byte the 0.2.0 one:
+Fields added in 0.3.0, absent when they do not apply:
 
 | Field | Meaning |
 |---|---|
@@ -388,7 +387,7 @@ them is byte for byte the 0.2.0 one:
 | `warnings[]` | `{code, message, fix}`; codes `region_mismatch` and `region_assumed` ([Regions](#regions)) |
 | `ignored_providers`, `ignored[]` | with `--ignore-provider`: the list given, and `{address, type, provider, action}` of each resource left out |
 
-Fields added for per-region pricing (unreleased), always present:
+Fields added in 0.3.0 for per-region pricing, always present:
 
 | Field | Meaning |
 |---|---|

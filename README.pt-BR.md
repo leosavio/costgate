@@ -117,8 +117,8 @@ O script compara com o testdata da tag instalada:
 git clone -q --depth 1 --branch "v${v}" https://github.com/leosavio/costgate costgate-src && cd costgate-src
 curl -fsSLO https://raw.githubusercontent.com/leosavio/costgate/main/scripts/smoke-check.sh
 sh smoke-check.sh "$(command -v costgate)" "${v}"
-# ok version: costgate 0.2.0
-# ok us-east-1: 1415 prices, ...
+# ok version: costgate 0.3.0
+# ok us-east-1: 2684 prices, ...
 # ok baseline: exit 1, ### costgate: ❌ +US$ 414.16/month · over ceiling
 ```
 
@@ -378,8 +378,7 @@ linha casa. Com snapshot gravado pelo costgate 0.1.x (`schema_version` 1), `usag
 chave de preço: o SKU depende do tipo de instância que a premissa nomeia, então `price_key`,
 `sku`, `usage_type`, `rate_code` e `billing_description` saem vazios e `monthly` é 0.
 
-Campos adicionados depois da 0.2.0 (sem release), todos ausentes quando não se aplicam, então um
-relatório sem eles é byte a byte o da 0.2.0:
+Campos adicionados na 0.3.0, ausentes quando não se aplicam:
 
 | Campo | Significado |
 |---|---|
@@ -387,7 +386,7 @@ relatório sem eles é byte a byte o da 0.2.0:
 | `warnings[]` | `{code, message, fix}`; códigos `region_mismatch` e `region_assumed` ([Regiões](#regiões)) |
 | `ignored_providers`, `ignored[]` | com `--ignore-provider`: a lista passada, e `{address, type, provider, action}` de cada recurso deixado de fora |
 
-Campos da precificação por região (não lançados), sempre presentes:
+Campos da precificação por região, novos na 0.3.0, sempre presentes:
 
 | Campo | Significado |
 |---|---|
