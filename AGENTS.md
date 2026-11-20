@@ -48,6 +48,14 @@ C1–C9 ok, C5 de tela pendente). Release [v0.3.0](https://github.com/leosavio/c
 Markdown traz o total depois da mudança ao lado do delta (`· total US$ X/month`, `≥` quando há
 recurso não precificado), porque um plan sem mudança lia "US$ 0.00/month" num stack de US$ 110,50.
 P10 da validação não é defeito: a linha da taxa do Auto Mode já leva `premise`, `declared` e `note`.
+P11: `control_plane_scaling_config.tier` (`tier-xl` a `tier-8xl`, schema do provider conferido em
+2026-11-20) precificado por hora em cima do control plane (`AmazonEKS-Hours:<XL…8XL>-ProvisionedTier`;
+a doc da AWS diz "in addition to the standard or extended support"); sem o bloco, a linha diz
+"standard tier". P13: `aws_eks_node_group` (`desired_size` × primeiro de `instance_types`, Spot pela
+premissa, disco `disk_size` ou 20 GB gp2; Windows e `CUSTOM` não precificados) e
+`aws_secretsmanager_secret` (US$ 0,40 por segredo e por réplica); `_secret_version`, `_policy` e
+`_rotation` no custo zero. ap-southeast-1 grafa `APS1-AWSSecretsManager-Secret` (singular): alias em
+`usageTypeAliases`. Snapshots das 36 regiões regravados com as regras novas (+5 preços cada).
 
 9ª sessão (decisão do operador, 2026-11-20: "a ferramenta tem que valer para toda a AWS"):
 snapshots das 36 regiões da Price List pública embutidos em gzip (`pricing/<região>.json.gz`,
@@ -135,8 +143,8 @@ Operador confirmou D4/D5 da ADR-001. Integração com o foundation **só documen
 
 - [ ] Foundation: errata na ADR-011 §2 (Infracost → costgate) e job de custo a partir de `docs/integration/github-actions.md`
 - [ ] Foundation: pin 0.3.0 no job `cost` (hoje 0.2.0; `--region` mudou de sentido, conferir o comentário de um PR)
-- [ ] P11 do workshop: `control_plane_scaling_config.tier` do `aws_eks_cluster` (conferir o schema do provider e os SKUs)
-- [ ] P13 do workshop: `aws_eks_node_group` (`instance_types` × `desired_size`) e `aws_secretsmanager_secret`
+- [ ] Release v0.4.0 (P12 título com total, P11 tier, P13 node group e Secrets Manager)
+- [ ] `aws_eks_node_group` com launch template: ler tipo e disco do `aws_launch_template` do mesmo plan (hoje: não precificado sem `instance_types`, disco pela premissa `root_volume_gb`)
 - [ ] Preço de Local Zone / Wavelength (hoje recebe o preço da região-mãe) quando um caso real pedir
 - [ ] Partição China (`cn-*`): endpoint `pricing.cn-north-1.amazonaws.com.cn`, preços em CNY; exige moeda no relatório
 - [ ] P4 do workshop: disco raiz do NodeClass/EC2NodeClass (`kubectl_manifest`) por premissa

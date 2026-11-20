@@ -5,8 +5,8 @@
   "region": "us-east-1",
   "currency": "USD",
   "pricing": {
-    "as_of": "2026-11-11T15:35:57Z",
-    "sha256": "15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744",
+    "as_of": "2026-11-11T19:56:06Z",
+    "sha256": "c2ef4ad3277674058fb633619219ec0d5a25388cb0eb31ca088eed69d65e7c30",
     "sources": [
       {
         "service": "AWSCertificateManager",
@@ -21,6 +21,13 @@
         "version": "20261102172009",
         "publication_date": "2026-11-02T17:20:09Z",
         "path": "/offers/v1.0/aws/AWSCloudTrail/20261102172009/us-east-1/index.csv"
+      },
+      {
+        "service": "AWSSecretsManager",
+        "scope": "region",
+        "version": "20261111195606",
+        "publication_date": "2026-11-11T19:56:06Z",
+        "path": "/offers/v1.0/aws/AWSSecretsManager/20261111195606/us-east-1/index.csv"
       },
       {
         "service": "AmazonEC2",
@@ -76,14 +83,14 @@
   "snapshots": [
     {
       "region": "eu-west-1",
-      "as_of": "2026-11-11T15:35:57Z",
-      "sha256": "a69153b222e00e1d026a374c790ed9d190327f26381a828e1a793484eb13c8a8",
+      "as_of": "2026-11-11T19:56:06Z",
+      "sha256": "ab2af5b1439f30e6730c0a03a225aacef8e23203cbe3f2a986c82f9428f4c108",
       "resources": 3
     },
     {
       "region": "us-east-1",
-      "as_of": "2026-11-11T15:35:57Z",
-      "sha256": "15582beb60a18ae95dceb0bceb3d70f51fb68ef0ef6885e1761bd86af8abf744",
+      "as_of": "2026-11-11T19:56:06Z",
+      "sha256": "c2ef4ad3277674058fb633619219ec0d5a25388cb0eb31ca088eed69d65e7c30",
       "resources": 3
     }
   ],

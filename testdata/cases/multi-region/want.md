@@ -48,4 +48,4 @@
 
 </details>
 
-<sub>costgate test · AWS Price List Bulk API snapshots `eu-west-1` as of 2026-11-11T15:35:57Z (sha256 `a69153b222e0`), `us-east-1` as of 2026-11-11T15:35:57Z (sha256 `15582beb60a1`) · on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included.</sub>
+<sub>costgate test · AWS Price List Bulk API snapshots `eu-west-1` as of 2026-11-11T19:56:06Z (sha256 `ab2af5b1439f`), `us-east-1` as of 2026-11-11T19:56:06Z (sha256 `c2ef4ad32776`) · on-demand list prices, 730 h/month unless a premise overrides it · Savings Plans, Reserved Instances, credits, Free Tier and taxes are not included.</sub>

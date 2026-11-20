@@ -56,7 +56,17 @@ var (
 	keyPCAShortLived = catalog.Key("AWSCertificateManager", "ShortLivedCertificatePrivateCA", "")
 	keyEKSCluster    = catalog.Key("AmazonEKS", "AmazonEKS-Hours:perCluster", "CreateOperation")
 	keyEKSExtended   = catalog.Key("AmazonEKS", "AmazonEKS-Hours:extendedSupport", "ExtendedSupport")
+	keySecret        = catalog.Key("AWSSecretsManager", "AWSSecretsManager-Secrets", "")
 )
+
+// eksTiers maps control_plane_scaling_config.tier to the code of its
+// provisioned tier usage type.
+var eksTiers = map[string]string{"tier-xl": "XL", "tier-2xl": "2XL", "tier-4xl": "4XL", "tier-8xl": "8XL"}
+
+// eksTierKey is the hour of a provisioned control plane tier.
+func eksTierKey(code string) string {
+	return catalog.Key("AmazonEKS", "AmazonEKS-Hours:"+code+"-ProvisionedTier", "ProvisionedControlPlaneUsage")
+}
 
 // eksAutoModeKey is the EKS Auto Mode management fee of one instance type.
 func eksAutoModeKey(instanceType string) string {
@@ -109,6 +119,8 @@ var estimators = map[string]estimator{
 	"aws_acm_certificate":                        acmCertificate,
 	"aws_accessanalyzer_analyzer":                accessAnalyzer,
 	"aws_eks_cluster":                            eksCluster,
+	"aws_eks_node_group":                         eksNodeGroup,
+	"aws_secretsmanager_secret":                  secret,
 }
 
 // zeroCostTypes have no charge of their own. Their indirect costs (traffic,
@@ -136,7 +148,9 @@ var zeroCostTypes = map[string]bool{
 	"aws_s3_bucket_server_side_encryption_configuration": true, "aws_s3_bucket_ownership_controls": true,
 	"aws_s3_bucket_acl": true, "aws_s3_bucket_lifecycle_configuration": true, "aws_s3_bucket_cors_configuration": true,
 	"aws_s3_bucket_logging": true, "aws_s3_bucket_notification": true, "aws_s3_bucket_object_lock_configuration": true,
-	"terraform_data": true, "null_resource": true,
+	"aws_secretsmanager_secret_version": true, "aws_secretsmanager_secret_policy": true,
+	"aws_secretsmanager_secret_rotation": true,
+	"terraform_data":                     true, "null_resource": true,
 }
 
 var zeroCostPrefixes = []string{
@@ -454,19 +468,43 @@ func eksCluster(a attrs, u usage.Resolved) side {
 	if l, ok := a.list("outpost_config"); ok && len(l) > 0 {
 		return unpriced("local cluster on AWS Outposts (outpost_config) is not modeled")
 	}
+	// The provisioned control plane tier is billed by the hour on top of the
+	// standard or extended support hour. A tier changed outside Terraform is
+	// not in the plan.
+	var tierComp *comp
+	tierNote := "standard tier: the plan has no control_plane_scaling_config"
 	if sc, ok := a.first("control_plane_scaling_config"); ok {
-		if tier, _ := sc.str("tier"); tier != "" && tier != "standard" {
-			return unpriced("provisioned control plane tier %q is not modeled", tier)
+		if sc.isUnknown("tier") {
+			return unpriced("control_plane_scaling_config.tier unknown at plan time")
+		}
+		tier, _ := sc.str("tier")
+		tierNote = ""
+		if tier != "" && tier != "standard" {
+			code, ok := eksTiers[tier]
+			if !ok {
+				return unpriced("provisioned control plane tier %q is not modeled", tier)
+			}
+			c := hourly("provisioned control plane, "+tier, eksTierKey(code), u, nil)
+			c.note = "billed on top of the control plane hour"
+			tierComp = &c
 		}
 	}
 	cp := hourly("cluster control plane, standard support", keyEKSCluster, u, nil)
+	var notes []string
+	if tierNote != "" {
+		notes = append(notes, tierNote)
+	}
 	var s side
 	if u.ExtendedSupportHours.Declared {
+		cp.note = strings.Join(notes, "; ")
 		s.comps = append(s.comps, cp, comp{name: "extended support", key: keyEKSExtended, qty: u.ExtendedSupportHours.V, unit: "h",
 			premise: "extended_support_hours", declared: true, rule: BillingUsage, note: "billed on top of the control plane hour"})
 	} else {
-		cp.note = "extended support not included; declare extended_support_hours for a version in extended support"
+		cp.note = strings.Join(append(notes, "extended support not included; declare extended_support_hours for a version in extended support"), "; ")
 		s.comps = append(s.comps, cp)
+	}
+	if tierComp != nil {
+		s.comps = append(s.comps, *tierComp)
 	}
 	cc, ok := a.first("compute_config")
 	if on, _ := cc.boolean("enabled"); !ok || !on {
@@ -482,6 +520,86 @@ func eksCluster(a attrs, u usage.Resolved) side {
 	for _, it := range am.Keys() {
 		s.comps = append(s.comps, comp{name: "EKS Auto Mode management fee, " + it, key: eksAutoModeKey(it), qty: am.V[it], unit: "h",
 			premise: "auto_mode_instance_hours", declared: true, rule: BillingUsage, note: "EC2 cost of the nodes not included"})
+	}
+	return s
+}
+
+// eksNodeGroup prices a managed node group as desired_size Linux instances
+// of its first instance type, plus their disks. An autoscaler moves
+// desired_size after apply; the estimate is the size the plan sets.
+func eksNodeGroup(a attrs, u usage.Resolved) side {
+	if at, _ := a.str("ami_type"); strings.HasPrefix(at, "WINDOWS_") || at == "CUSTOM" {
+		return unpriced("ami_type %q is not modeled (only Amazon Linux and Bottlerocket)", at)
+	}
+	sc, _ := a.first("scaling_config")
+	desired, ok := sc.number("desired_size")
+	if !ok {
+		return unpriced("scaling_config.desired_size unknown at plan time")
+	}
+	_, hasLT := a.first("launch_template")
+	types, _ := a.list("instance_types")
+	var notes []string
+	var it string
+	switch {
+	case len(types) > 0:
+		it, _ = types[0].(string)
+		if len(types) > 1 {
+			notes = append(notes, fmt.Sprintf("first of %d instance_types", len(types)))
+		}
+	case a.isUnknown("instance_types"):
+		return unpriced("instance_types unknown at plan time")
+	case hasLT:
+		return unpriced("instance type set by the launch template, which the node group does not carry in the plan")
+	default:
+		it = "t3.medium"
+		notes = append(notes, "instance_types not set: EKS default t3.medium")
+	}
+	if it == "" {
+		return unpriced("instance_types unknown at plan time")
+	}
+	notes = append(notes, money.Trim(desired)+" nodes from scaling_config.desired_size, which an autoscaler changes after apply")
+	c := hourly("compute on-demand, Linux "+it, instanceKey(it), u, desired)
+	if ct, _ := a.str("capacity_type"); ct == "SPOT" {
+		c.name = "compute Spot, Linux " + it
+		c.factor = money.Sub(money.Int(1), u.SpotDiscount.V)
+		c.premise = "spot_discount"
+		c.declared = true
+		c.rule = BillingUsage
+		notes = append(notes, "on-demand × (1 − spot_discount "+money.Trim(u.SpotDiscount.V)+")")
+	}
+	c.note = strings.Join(notes, "; ")
+	s := side{comps: []comp{c}}
+
+	// Without a launch template, EKS creates one with disk_size GiB (20 by
+	// default for Linux) of gp2; with one, the disk is in the launch template.
+	size, sizeOK := a.number("disk_size")
+	note := "gp2, the volume type of the launch template EKS creates"
+	switch {
+	case hasLT:
+		size = u.RootVolumeGB.V
+		note = "disk set by the launch template; root_volume_gb premise " + money.Trim(size) + " GB (" + u.RootVolumeGB.From + "), gp2 assumed"
+	case !sizeOK:
+		size = money.Int(20)
+		note = "disk_size not set: EKS default 20 GB; " + note
+	}
+	dc, why := volumeComps("node disks", "gp2", money.Mul(size, desired), nil, nil)
+	if why != "" {
+		return unpriced("node disk: %s", why)
+	}
+	dc[0].note = money.Trim(size) + " GB × " + money.Trim(desired) + " nodes; " + note
+	s.comps = append(s.comps, dc...)
+	return s
+}
+
+// secret prices a Secrets Manager secret and its replicas per month. Each
+// replica is billed in its own region; it is priced here at the price of the
+// primary region.
+func secret(a attrs, u usage.Resolved) side {
+	s := side{comps: []comp{{name: "secret", key: keySecret, qty: money.Int(1), unit: "secret-month", declared: true,
+		rule: BillingFixedMonthly, note: "API requests not priced"}}}
+	if reps, _ := a.list("replica"); len(reps) > 0 {
+		s.comps = append(s.comps, comp{name: "replica secrets", key: keySecret, qty: money.Int(int64(len(reps))), unit: "secret-month",
+			declared: true, rule: BillingFixedMonthly, note: "at the price of the primary region; each replica is billed in its region"})
 	}
 	return s
 }

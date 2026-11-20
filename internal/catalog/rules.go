@@ -107,13 +107,26 @@ func Regions() []string {
 	return out
 }
 
+// usageTypeAliases maps a usage type a region spells differently, after the
+// region prefix is removed, to the name the rules and price keys use. The
+// raw usage type, as in the bill, stays in the snapshot entry.
+var usageTypeAliases = map[string]string{
+	// ap-southeast-1 (checked 2026-11-20): APS1-AWSSecretsManager-Secret.
+	"AWSSecretsManager-Secret": "AWSSecretsManager-Secrets",
+}
+
 func normalizeUsageType(usageType string, prefixes []string) string {
+	ut := usageType
 	for _, p := range prefixes {
 		if len(usageType) > len(p) && usageType[:len(p)] == p {
-			return usageType[len(p):]
+			ut = usageType[len(p):]
+			break
 		}
 	}
-	return usageType
+	if a, ok := usageTypeAliases[ut]; ok {
+		return a
+	}
+	return ut
 }
 
 var ec2LinuxShared = map[string]string{
@@ -145,6 +158,11 @@ var Rules = []Rule{
 	{Service: "AmazonEKS", Scope: ScopeRegion, UsageType: "AmazonEKS-Hours:perCluster", Operation: "CreateOperation"},
 	{Service: "AmazonEKS", Scope: ScopeRegion, UsageType: "AmazonEKS-Hours:extendedSupport", Operation: "ExtendedSupport"},
 	{Service: "AmazonEKS", Scope: ScopeRegion, UsageType: "EKS-Auto:", UsagePrefix: true, Operation: "EKSAutoUsage"},
+	// Provisioned control plane tiers (AmazonEKS-Hours:<XL|2XL|4XL|8XL>-ProvisionedTier).
+	{Service: "AmazonEKS", Scope: ScopeRegion, UsageType: "AmazonEKS-Hours:", UsagePrefix: true, Operation: "ProvisionedControlPlaneUsage"},
+
+	// Secrets Manager: secret-month (API requests are not priced).
+	{Service: "AWSSecretsManager", Scope: ScopeRegion, UsageType: "AWSSecretsManager-Secrets", Operation: ""},
 
 	// VPC: public IPv4, interface endpoints, Transit Gateway, Site-to-Site VPN.
 	{Service: "AmazonVPC", Scope: ScopeRegion, UsageType: "PublicIPv4:InUseAddress", Operation: ""},
