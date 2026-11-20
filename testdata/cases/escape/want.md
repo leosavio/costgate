@@ -1,5 +1,5 @@
 <!-- costgate -->
-### costgate: ⚠️ +US$ 1.00/month · unpriced resources
+### costgate: ⚠️ +US$ 1.00/month · total ≥ US$ 1.00/month · unpriced resources
 
 | Monthly cost (USD) | Before | After | Delta |
 |---|---:|---:|---:|

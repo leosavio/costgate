@@ -151,7 +151,7 @@ func Markdown(in Input) string {
 	w := func(format string, args ...any) { fmt.Fprintf(&b, format, args...) }
 
 	icon := map[string]string{StatusOK: "✅", StatusOverCeiling: "❌", StatusUnpriced: "⚠️"}[v.Status]
-	w("%s\n### costgate: %s %s/month%s\n\n", Marker, icon, signedUSD(res.Delta), statusText(v.Status))
+	w("%s\n### costgate: %s %s/month · %s%s\n\n", Marker, icon, signedUSD(res.Delta), totalText(res), statusText(v.Status))
 	for _, wr := range in.Warnings {
 		w("> ⚠️ **Warning (`%s`):** %s.<br>**Fix:** %s.\n\n", wr.Code, wr.Message, wr.Fix)
 	}
@@ -349,6 +349,16 @@ func dash(s string) string {
 		return "–"
 	}
 	return s
+}
+
+// totalText is the monthly total after the change, for the title next to the
+// delta, so a plan that changes nothing does not read as "costs nothing". With
+// unpriced resources the total is a lower bound.
+func totalText(res *estimate.Result) string {
+	if res.Incomplete() {
+		return "total ≥ US$ " + usd(res.After) + "/month"
+	}
+	return "total US$ " + usd(res.After) + "/month"
 }
 
 func statusText(s string) string {

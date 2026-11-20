@@ -40,7 +40,14 @@ Bulk API e devolve Markdown/JSON + exit code para gate de PR (HTML autocontido o
 
 ## Estado atual (onde parei)
 
-> Última atualização: 2026-11-20 (9ª sessão, todas as regiões, branch `feat/all-regions`)
+> Última atualização: 2026-11-20 (10ª sessão, v0.3.0 e título com total)
+
+10ª sessão: validação 2 no workshop Spark on EKS (`aws-spark-on-eks-workshop/extra-02-avaliacao-ferramentas/kubecost-costgate-insights.md`,
+C1–C9 ok, C5 de tela pendente). Release [v0.3.0](https://github.com/leosavio/costgate/releases/tag/v0.3.0)
+(tag em `075ade8`: 7ª à 9ª sessão, notas com a mudança de `--region`), tap atualizado. P12: o título do
+Markdown traz o total depois da mudança ao lado do delta (`· total US$ X/month`, `≥` quando há
+recurso não precificado), porque um plan sem mudança lia "US$ 0.00/month" num stack de US$ 110,50.
+P10 da validação não é defeito: a linha da taxa do Auto Mode já leva `premise`, `declared` e `note`.
 
 9ª sessão (decisão do operador, 2026-11-20: "a ferramenta tem que valer para toda a AWS"):
 snapshots das 36 regiões da Price List pública embutidos em gzip (`pricing/<região>.json.gz`,
@@ -127,7 +134,9 @@ Operador confirmou D4/D5 da ADR-001. Integração com o foundation **só documen
 ## Próximos passos
 
 - [ ] Foundation: errata na ADR-011 §2 (Infracost → costgate) e job de custo a partir de `docs/integration/github-actions.md`
-- [ ] Release v0.3.0 com as mudanças da 7ª à 9ª sessão (região por recurso, 36 regiões, gp3, `--ignore-provider`, EKS, HTML); revalidar no plan do workshop sem `--region`
+- [ ] Foundation: pin 0.3.0 no job `cost` (hoje 0.2.0; `--region` mudou de sentido, conferir o comentário de um PR)
+- [ ] P11 do workshop: `control_plane_scaling_config.tier` do `aws_eks_cluster` (conferir o schema do provider e os SKUs)
+- [ ] P13 do workshop: `aws_eks_node_group` (`instance_types` × `desired_size`) e `aws_secretsmanager_secret`
 - [ ] Preço de Local Zone / Wavelength (hoje recebe o preço da região-mãe) quando um caso real pedir
 - [ ] Partição China (`cn-*`): endpoint `pricing.cn-north-1.amazonaws.com.cn`, preços em CNY; exige moeda no relatório
 - [ ] P4 do workshop: disco raiz do NodeClass/EC2NodeClass (`kubectl_manifest`) por premissa

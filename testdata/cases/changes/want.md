@@ -1,5 +1,5 @@
 <!-- costgate -->
-### costgate: ✅ -US$ 51.70/month
+### costgate: ✅ -US$ 51.70/month · total US$ 21.82/month
 
 | Monthly cost (USD) | Before | After | Delta |
 |---|---:|---:|---:|

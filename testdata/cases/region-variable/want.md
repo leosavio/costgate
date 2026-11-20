@@ -1,5 +1,5 @@
 <!-- costgate -->
-### costgate: ✅ +US$ 16.10/month
+### costgate: ✅ +US$ 16.10/month · total US$ 16.10/month
 
 | Monthly cost (USD) | Before | After | Delta |
 |---|---:|---:|---:|
