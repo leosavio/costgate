@@ -24,6 +24,14 @@ detalhes de implementação decididos pelo agente dentro desse escopo.
 > grava um documento por linha para o Athena. O cálculo não mudou: a estimativa usa a primeira
 > faixa, e o total dos goldens é o mesmo da v0.1.1. `record`, `ledger` e conciliação com a fatura
 > (camadas 2 e 3) não foram decididos.
+>
+> Nota 2026-11-20: o item "Só us-east-1 é versionado" de Consequências, com o mapa de prefixos da
+> frase seguinte (us-east-1/2 e us-west-1/2), foi superado por decisão do operador ("a ferramenta
+> tem que valer para toda a AWS"). O binário embute os snapshots das 36 regiões da Price List
+> pública (34 comerciais e 2 GovCloud; a China fica fora, com outro endpoint e preços em CNY) e
+> precifica cada recurso com o snapshot da sua região (PR #10). Decisão em
+> `leosavio-org/knowledge/intent/2026-11-20-costgate-todas-as-regioes-aws.md`. O texto original
+> fica em Consequências como registro do MVP.
 
 ## Contexto
 
